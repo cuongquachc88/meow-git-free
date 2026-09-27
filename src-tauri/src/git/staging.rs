@@ -1,4 +1,4 @@
-use anyhow::Result;
+use anyhow::{anyhow, Result};
 use git2::{IndexAddOption, Repository, Status, StatusOptions};
 use serde::{Deserialize, Serialize};
 
@@ -88,7 +88,7 @@ pub fn unstage_file(path: &str, file: &str) -> Result<()> {
     Ok(())
 }
 
-pub fn create_commit(path: &str, message: &str) -> Result<String> {
+pub fn create_commit(path: &str, message: &str, amend: bool) -> Result<String> {
     let repo = Repository::open(path)?;
     let mut index = repo.index()?;
     let tree_id = index.write_tree()?;
@@ -96,13 +96,24 @@ pub fn create_commit(path: &str, message: &str) -> Result<String> {
 
     let sig = repo.signature()?;
 
-    let parent_commits = match repo.head() {
-        Ok(head) => vec![head.peel_to_commit()?],
-        Err(_) => vec![],
+    let parents: Vec<git2::Commit> = if amend {
+        let head = repo
+            .head()
+            .map_err(|_| anyhow!("Cannot amend: repository has no commits"))?
+            .peel_to_commit()?;
+        if head.parent_count() == 0 {
+            return Err(anyhow!("Cannot amend the initial commit"));
+        }
+        head.parents().collect()
+    } else {
+        match repo.head() {
+            Ok(head) => vec![head.peel_to_commit()?],
+            Err(_) => vec![],
+        }
     };
 
-    let parents: Vec<&git2::Commit> = parent_commits.iter().collect();
-    let oid = repo.commit(Some("HEAD"), &sig, &sig, message, &tree, &parents)?;
+    let parent_refs: Vec<&git2::Commit> = parents.iter().collect();
+    let oid = repo.commit(Some("HEAD"), &sig, &sig, message, &tree, &parent_refs)?;
     Ok(oid.to_string())
 }
 

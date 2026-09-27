@@ -1,4 +1,4 @@
-use crate::git::{branches, commits, diff, merge, remotes, repo, staging, submodules, tags};
+use crate::git::{blame, branches, commits, diff, merge, remotes, repo, staging, submodules, tags};
 use serde_json::Value;
 
 #[tauri::command]
@@ -82,8 +82,8 @@ pub fn unstage_file(path: String, file: String) -> Result<(), String> {
 }
 
 #[tauri::command]
-pub fn create_commit(path: String, message: String) -> Result<String, String> {
-    staging::create_commit(&path, &message).map_err(|e| e.to_string())
+pub fn create_commit(path: String, message: String, amend: Option<bool>) -> Result<String, String> {
+    staging::create_commit(&path, &message, amend.unwrap_or(false)).map_err(|e| e.to_string())
 }
 
 #[tauri::command]
@@ -142,6 +142,32 @@ pub fn fetch_remote(path: String, remote_name: String) -> Result<(), String> {
 }
 
 #[tauri::command]
+pub fn fetch_with_token(path: String, remote_name: String, username: String, token: String) -> Result<(), String> {
+    remotes::fetch_with_token(&path, &remote_name, &username, &token).map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+pub fn push_with_token(path: String, remote_name: String, branch: String, username: String, token: String) -> Result<(), String> {
+    remotes::push_with_token(&path, &remote_name, &branch, &username, &token).map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+pub fn pull_branch(path: String, remote_name: String, branch: String) -> Result<bool, String> {
+    remotes::pull_branch(&path, &remote_name, &branch).map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+pub fn pull_with_token(
+    path: String,
+    remote_name: String,
+    branch: String,
+    username: String,
+    token: String,
+) -> Result<bool, String> {
+    remotes::pull_with_token(&path, &remote_name, &branch, &username, &token).map_err(|e| e.to_string())
+}
+
+#[tauri::command]
 pub fn merge_branch(path: String, branch_name: String) -> Result<bool, String> {
     merge::merge_branch(&path, &branch_name).map_err(|e| e.to_string())
 }
@@ -154,6 +180,16 @@ pub fn get_conflicts(path: String) -> Result<Vec<merge::ConflictFile>, String> {
 #[tauri::command]
 pub fn abort_merge(path: String) -> Result<(), String> {
     merge::abort_merge(&path).map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+pub fn reset_to_ref(path: String, target_ref: String, mode: String) -> Result<(), String> {
+    merge::reset_to_ref(&path, &target_ref, &mode).map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+pub fn rebase_onto(path: String, onto_branch: String) -> Result<(), String> {
+    merge::rebase_onto(&path, &onto_branch).map_err(|e| e.to_string())
 }
 
 #[tauri::command]
@@ -179,4 +215,14 @@ pub fn list_submodules(path: String) -> Result<Vec<submodules::SubmoduleInfo>, S
 #[tauri::command]
 pub fn update_submodules(path: String) -> Result<(), String> {
     submodules::update_submodules(&path).map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+pub fn blame_file(path: String, file: String) -> Result<Vec<blame::BlameLine>, String> {
+    blame::blame_file(&path, &file).map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+pub fn read_blob_at(path: String, file: String, commit_ref: String) -> Result<String, String> {
+    blame::read_blob_at(&path, &file, &commit_ref).map_err(|e| e.to_string())
 }

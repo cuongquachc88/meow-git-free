@@ -8,6 +8,7 @@ pub mod merge;
 pub mod tags;
 pub mod submodules;
 pub mod lfs;
+pub mod blame;
 
 #[cfg(test)]
 mod tests;

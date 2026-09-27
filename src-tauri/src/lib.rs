@@ -14,6 +14,7 @@ use commands::{
 pub fn run() {
     tauri::Builder::default()
         .plugin(tauri_plugin_opener::init())
+        .plugin(tauri_plugin_dialog::init())
         .invoke_handler(tauri::generate_handler![
             // repo
             open_repo,
@@ -49,10 +50,16 @@ pub fn run() {
             add_remote,
             remove_remote,
             fetch_remote,
-            // merge
+            fetch_with_token,
+            push_with_token,
+            pull_branch,
+            pull_with_token,
+            // merge / rebase / reset
             merge_branch,
             get_conflicts,
             abort_merge,
+            reset_to_ref,
+            rebase_onto,
             // tags
             list_tags,
             create_tag,
@@ -60,6 +67,9 @@ pub fn run() {
             // submodules
             list_submodules,
             update_submodules,
+            // blame & blob
+            blame_file,
+            read_blob_at,
             // accounts
             store_account_token,
             get_account_token,

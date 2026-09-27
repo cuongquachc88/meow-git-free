@@ -128,7 +128,7 @@ mod staging_tests {
         config.set_str("user.email", "t@t.com").unwrap();
         drop(repo);
 
-        let oid = staging::create_commit(p, "Add hello.txt").unwrap();
+        let oid = staging::create_commit(p, "Add hello.txt", false).unwrap();
         assert!(!oid.is_empty());
     }
 
@@ -215,6 +215,47 @@ mod tags_tests {
         let list = tags::list_tags(p).unwrap();
         let tag = list.iter().find(|t| t.name == "v1.0.0-ann").unwrap();
         assert_eq!(tag.message.as_deref(), Some("Release 1.0.0"));
+    }
+}
+
+#[cfg(test)]
+mod merge_tests {
+    use super::*;
+    use crate::git::{branches, commits, merge, staging};
+
+    #[test]
+    fn test_merge_branch_fast_forward() {
+        let (_dir, path) = make_test_repo();
+        let p = path.to_str().unwrap();
+
+        let default = branches::list_branches(p)
+            .unwrap()
+            .into_iter()
+            .find(|b| b.is_head)
+            .unwrap()
+            .name;
+
+        branches::create_branch(p, "feature", None).unwrap();
+        branches::checkout_branch(p, "feature").unwrap();
+
+        make_test_file(&path, "feature.txt", "on feature");
+        staging::stage_file(p, "feature.txt").unwrap();
+
+        let repo = Repository::open(p).unwrap();
+        let mut config = repo.config().unwrap();
+        config.set_str("user.name", "Test").unwrap();
+        config.set_str("user.email", "t@t.com").unwrap();
+        drop(repo);
+
+        staging::create_commit(p, "Feature work", false).unwrap();
+
+        branches::checkout_branch(p, &default).unwrap();
+        let clean = merge::merge_branch(p, "feature").unwrap();
+        assert!(clean);
+
+        let log = commits::get_log(p, Some(10)).unwrap();
+        assert!(log.iter().any(|c| c.summary == "Feature work"));
+        assert!(staging::get_status(p).unwrap().is_empty());
     }
 }
 

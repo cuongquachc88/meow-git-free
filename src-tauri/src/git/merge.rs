@@ -11,11 +11,7 @@ pub struct ConflictFile {
     pub theirs: Option<String>,
 }
 
-pub fn merge_branch(path: &str, branch_name: &str) -> Result<bool> {
-    let repo = Repository::open(path)?;
-    let branch_ref = repo.find_branch(branch_name, git2::BranchType::Local)?;
-    let annotated = repo.reference_to_annotated_commit(branch_ref.get())?;
-
+fn merge_annotated(repo: &Repository, annotated: git2::AnnotatedCommit, merge_label: &str) -> Result<bool> {
     let (analysis, _) = repo.merge_analysis(&[&annotated])?;
 
     if analysis.is_up_to_date() {
@@ -23,10 +19,12 @@ pub fn merge_branch(path: &str, branch_name: &str) -> Result<bool> {
     }
 
     if analysis.is_fast_forward() {
-        let refname = format!("refs/heads/{}", branch_name);
-        let mut reference = repo.find_reference(&refname)?;
+        let head = repo.head()?;
+        let refname = head
+            .name()
+            .ok_or_else(|| anyhow!("Cannot fast-forward: detached HEAD"))?;
+        let mut reference = repo.find_reference(refname)?;
         reference.set_target(annotated.id(), "fast-forward")?;
-        repo.set_head(&refname)?;
         repo.checkout_head(Some(git2::build::CheckoutBuilder::default().force()))?;
         return Ok(true);
     }
@@ -34,13 +32,11 @@ pub fn merge_branch(path: &str, branch_name: &str) -> Result<bool> {
     let mut opts = MergeOptions::new();
     repo.merge(&[&annotated], Some(&mut opts), None)?;
 
-    // Check for conflicts
     let index = repo.index()?;
     if index.has_conflicts() {
-        return Ok(false); // false = has conflicts
+        return Ok(false);
     }
 
-    // Auto-commit if no conflicts
     let tree_id = repo.index()?.write_tree()?;
     let tree = repo.find_tree(tree_id)?;
     let sig = repo.signature()?;
@@ -50,13 +46,28 @@ pub fn merge_branch(path: &str, branch_name: &str) -> Result<bool> {
         Some("HEAD"),
         &sig,
         &sig,
-        &format!("Merge branch '{}'", branch_name),
+        &format!("Merge branch '{}'", merge_label),
         &tree,
         &[&head_commit, &merge_commit],
     )?;
 
     repo.cleanup_state()?;
     Ok(true)
+}
+
+pub fn merge_branch(path: &str, branch_name: &str) -> Result<bool> {
+    let repo = Repository::open(path)?;
+    let branch_ref = repo.find_branch(branch_name, git2::BranchType::Local)?;
+    let annotated = repo.reference_to_annotated_commit(branch_ref.get())?;
+    merge_annotated(&repo, annotated, branch_name)
+}
+
+pub fn merge_ref(path: &str, ref_name: &str) -> Result<bool> {
+    let repo = Repository::open(path)?;
+    let obj = repo.revparse_single(ref_name)?;
+    let commit = obj.peel_to_commit()?;
+    let annotated = repo.find_annotated_commit(commit.id())?;
+    merge_annotated(&repo, annotated, ref_name)
 }
 
 pub fn get_conflicts(path: &str) -> Result<Vec<ConflictFile>> {
@@ -97,5 +108,32 @@ pub fn abort_merge(path: &str) -> Result<()> {
         Ok(())
     } else {
         Err(anyhow!("No merge in progress"))
+    }
+}
+
+/// Reset HEAD to a ref. mode: "soft" | "mixed" | "hard"
+pub fn reset_to_ref(path: &str, target_ref: &str, mode: &str) -> Result<()> {
+    let repo = Repository::open(path)?;
+    let obj = repo.revparse_single(target_ref)?;
+    let reset_type = match mode {
+        "soft" => git2::ResetType::Soft,
+        "hard" => git2::ResetType::Hard,
+        _ => git2::ResetType::Mixed,
+    };
+    repo.reset(&obj, reset_type, None)?;
+    Ok(())
+}
+
+/// Rebase current branch onto target branch using git CLI (libgit2 rebase is limited)
+pub fn rebase_onto(path: &str, onto_branch: &str) -> Result<()> {
+    let output = std::process::Command::new("git")
+        .args(["rebase", onto_branch])
+        .current_dir(path)
+        .output()?;
+    if output.status.success() {
+        Ok(())
+    } else {
+        let stderr = String::from_utf8_lossy(&output.stderr);
+        Err(anyhow!("Rebase failed: {}", stderr.trim()))
     }
 }

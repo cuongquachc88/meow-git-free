@@ -10,6 +10,8 @@ pub struct BranchInfo {
     pub kind: String,
     pub upstream: Option<String>,
     pub tip_id: Option<String>,
+    pub ahead: Option<usize>,
+    pub behind: Option<usize>,
 }
 
 pub fn list_branches(path: &str) -> Result<Vec<BranchInfo>> {
@@ -20,9 +22,9 @@ pub fn list_branches(path: &str) -> Result<Vec<BranchInfo>> {
         let (branch, kind) = branch_result?;
         let name = branch.name()?.unwrap_or("").to_string();
         let is_head = branch.is_head();
-        let upstream = branch
-            .upstream()
-            .ok()
+        let upstream_branch = branch.upstream().ok();
+        let upstream = upstream_branch
+            .as_ref()
             .and_then(|u| u.name().ok().flatten().map(|s| s.to_string()));
         let tip_id = branch
             .get()
@@ -30,12 +32,30 @@ pub fn list_branches(path: &str) -> Result<Vec<BranchInfo>> {
             .ok()
             .map(|c| c.id().to_string());
 
+        // Compute ahead/behind vs upstream
+        let (ahead, behind) = if let (Some(local_id), Some(upstream_b)) = (
+            branch.get().peel_to_commit().ok().map(|c| c.id()),
+            upstream_branch.as_ref(),
+        ) {
+            if let Ok(upstream_id) = upstream_b.get().peel_to_commit().map(|c| c.id()) {
+                repo.graph_ahead_behind(local_id, upstream_id)
+                    .map(|(a, b)| (Some(a), Some(b)))
+                    .unwrap_or((None, None))
+            } else {
+                (None, None)
+            }
+        } else {
+            (None, None)
+        };
+
         branches.push(BranchInfo {
             name,
             is_head,
             kind: format!("{:?}", kind),
             upstream,
             tip_id,
+            ahead,
+            behind,
         });
     }
 
@@ -67,6 +87,8 @@ pub fn create_branch(path: &str, name: &str, from_ref: Option<&str>) -> Result<B
         kind: "Local".to_string(),
         upstream: None,
         tip_id,
+        ahead: None,
+        behind: None,
     })
 }
 
