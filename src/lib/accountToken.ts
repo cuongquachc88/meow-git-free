@@ -1,12 +1,31 @@
 import { accounts as accountsIpc } from "../ipc/accounts";
 import type { Account } from "../types/accounts";
 
+/** In-memory only — avoids re-prompting when keychain read is slow; cleared on app quit. */
+const sessionTokens = new Map<string, string>();
+
+export function setSessionToken(accountId: string, token: string) {
+  sessionTokens.set(accountId, token.trim());
+}
+
+export function clearSessionToken(accountId: string) {
+  sessionTokens.delete(accountId);
+}
+
 export async function readStoredToken(accountId: string): Promise<string | null> {
   if (!accountId) return null;
+
+  const cached = sessionTokens.get(accountId);
+  if (cached) return cached;
+
   try {
     const token = await accountsIpc.getToken(accountId);
     const trimmed = typeof token === "string" ? token.trim() : "";
-    return trimmed.length > 0 ? trimmed : null;
+    if (trimmed.length > 0) {
+      sessionTokens.set(accountId, trimmed);
+      return trimmed;
+    }
+    return null;
   } catch {
     return null;
   }
@@ -36,6 +55,7 @@ export async function saveStoredToken(accountId: string, token: string): Promise
     throw new Error("Token is empty");
   }
   await accountsIpc.storeToken(accountId, trimmed);
+  setSessionToken(accountId, trimmed);
   const verified = await readStoredToken(accountId);
   if (!verified) {
     throw new Error(

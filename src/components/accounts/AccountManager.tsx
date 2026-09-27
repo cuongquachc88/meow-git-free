@@ -318,7 +318,7 @@ export function AccountManager() {
                       {!tokenStatus[a.id] && (
                         <button
                           type="button"
-                          onClick={() => void requestAccountPat(a.id)}
+                          onClick={() => void requestAccountPat(a.id, { force: true })}
                           className="text-[11px] shrink-0 px-2 py-1 rounded-lg border"
                           style={{ borderColor: "var(--border)", color: "var(--text-muted)" }}
                         >

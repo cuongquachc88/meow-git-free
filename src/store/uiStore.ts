@@ -22,6 +22,7 @@ interface UIStore {
   remoteSetupResolve: ((success: boolean) => void) | null;
   /** Full-width center viewer over commit graph (blame / diff). */
   centerFileView: null | "diff" | "blame";
+  syncToast: { id: number; kind: "busy" | "ok" | "err"; message: string } | null;
 
   setTheme: (theme: Theme) => void;
   setActivePanel: (panel: Panel) => void;
@@ -38,6 +39,7 @@ interface UIStore {
   closePatPrompt: () => void;
   openCenterFileView: (mode: "diff" | "blame") => void;
   closeCenterFileView: () => void;
+  setSyncToast: (toast: UIStore["syncToast"]) => void;
 }
 
 const savedTheme = (localStorage.getItem("meow-theme") as Theme | null) ?? "auto";
@@ -59,6 +61,7 @@ export const useUIStore = create<UIStore>((set) => ({
   remoteSetupReason: null,
   remoteSetupResolve: null,
   centerFileView: null,
+  syncToast: null,
 
   setTheme: (theme) => {
     localStorage.setItem("meow-theme", theme);
@@ -80,4 +83,5 @@ export const useUIStore = create<UIStore>((set) => ({
   closePatPrompt: () => set({ patPromptAccountId: null }),
   openCenterFileView: (centerFileView) => set({ centerFileView }),
   closeCenterFileView: () => set({ centerFileView: null }),
+  setSyncToast: (syncToast) => set({ syncToast }),
 }));

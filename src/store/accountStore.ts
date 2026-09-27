@@ -2,6 +2,7 @@ import { create } from "zustand";
 import { persist } from "zustand/middleware";
 import type { Account } from "../types/accounts";
 import { accounts as accountsIpc } from "../ipc/accounts";
+import { clearSessionToken } from "../lib/accountToken";
 import { normalizeRepoPath } from "../lib/repoPath";
 
 interface AccountStore {
@@ -27,6 +28,7 @@ export const useAccountStore = create<AccountStore>()(
 
       removeAccount: async (id) => {
         await accountsIpc.deleteToken(id);
+        clearSessionToken(id);
         set((s) => ({
           accounts: s.accounts.filter((a) => a.id !== id),
           repoAccountMap: Object.fromEntries(

@@ -1,13 +1,14 @@
-import { useEffect, useRef, useState, type ReactNode } from "react";
+import { useEffect, useState, type ReactNode } from "react";
+import { showSyncToast } from "../../lib/syncToast";
 import { useRepoStore } from "../../store/repoStore";
 import { useUIStore, Theme } from "../../store/uiStore";
 import { useAccountStore } from "../../store/accountStore";
-import { accounts as accountsIpc } from "../../ipc/accounts";
+import { readStoredToken } from "../../lib/accountToken";
 import { git } from "../../ipc/git";
 import { ensureRemoteBeforeSync } from "../../lib/ensureRemote";
 import { isNoRemoteError, resolveRemoteName } from "../../lib/remoteSync";
 import { pickAccountIdWithToken } from "../../lib/accountToken";
-import { requestAccountPat } from "../../lib/requestAccountPat";
+import { requestAccountPatForAuth } from "../../lib/requestAccountPat";
 import { useAccountTokenStatus } from "../../hooks/useAccountTokenStatus";
 import {
   SyncCancelledError,
@@ -19,6 +20,7 @@ import {
 import { RepoBranchPicker } from "./RepoBranchPicker";
 import { TOOLBAR_BRAND_H } from "../../constants/layout";
 import { AppLogo } from "../shared/AppLogo";
+import { AnimatedDots } from "../shared/AnimatedDots";
 import {
   IconAccount,
   IconBranchLocal,
@@ -30,7 +32,6 @@ import {
   IconPull,
   IconPush,
   IconRefresh,
-  IconSpinner,
   IconSun,
   IconThemeAuto,
 } from "../shared/icons/GitIcons";
@@ -53,26 +54,7 @@ export function ToolBar({
   const boundAccount = activeRepoPath ? getAccountForRepo(activeRepoPath) : null;
   const [toolbarAccountId, setToolbarAccountId] = useState("");
   type SyncOp = "fetch" | "pull" | "push";
-  type SyncStatus = { kind: "busy" | "ok" | "err"; text: string } | null;
   const [syncOp, setSyncOp] = useState<SyncOp | null>(null);
-  const [syncStatus, setSyncStatus] = useState<SyncStatus>(null);
-  const syncStatusTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
-
-  const flashSyncStatus = (status: SyncStatus) => {
-    if (syncStatusTimer.current) clearTimeout(syncStatusTimer.current);
-    setSyncStatus(status);
-    if (status && status.kind !== "busy") {
-      syncStatusTimer.current = setTimeout(() => setSyncStatus(null), 2800);
-    }
-  };
-
-  useEffect(
-    () => () => {
-      if (syncStatusTimer.current) clearTimeout(syncStatusTimer.current);
-    },
-    [],
-  );
-
   const syncBusy = syncOp !== null;
 
   useEffect(() => {
@@ -93,16 +75,11 @@ export function ToolBar({
   const toolbarAccount = accounts.find((a) => a.id === toolbarAccountId) ?? null;
   const toolbarHasToken = toolbarAccountId ? !!tokenStatus[toolbarAccountId] : false;
 
-  const getToken = async (accountId: string) => {
-    try { return await accountsIpc.getToken(accountId); }
-    catch { return null; }
-  };
-
   const runFetch = async () => {
     if (!activeRepoPath) return;
     const remote = await resolveRemoteName(activeRepoPath);
     if (toolbarAccount) {
-      const token = await getToken(toolbarAccount.id);
+      const token = await readStoredToken(toolbarAccount.id);
       if (token) {
         await git.fetchWithToken(activeRepoPath, remote, toolbarAccount.username, token);
         await Promise.all([refreshLog(), refreshBranches()]);
@@ -117,21 +94,21 @@ export function ToolBar({
     if (!activeRepoPath || syncBusy) return;
     if (!(await ensureRemoteBeforeSync(activeRepoPath))) return;
     setSyncOp("fetch");
-    flashSyncStatus({ kind: "busy", text: "Fetching…" });
+    showSyncToast("Fetching…", "busy");
     try {
       await runFetch();
-      flashSyncStatus({ kind: "ok", text: "Fetch done" });
+      showSyncToast("Fetch complete", "ok");
     } catch (e) {
       if (isNoRemoteError(e) && (await ensureRemoteBeforeSync(activeRepoPath))) {
         try {
           await runFetch();
-          flashSyncStatus({ kind: "ok", text: "Fetch done" });
+          showSyncToast("Fetch complete", "ok");
           return;
         } catch (retry) {
           e = retry;
         }
       }
-      flashSyncStatus({ kind: "err", text: "Fetch failed" });
+      showSyncToast("Fetch failed", "err");
       alert(`Fetch failed: ${e}`);
     } finally {
       setSyncOp(null);
@@ -141,7 +118,7 @@ export function ToolBar({
   const promptPatAndSave = async (): Promise<boolean> => {
     const acct = toolbarAccount ?? boundAccount ?? accounts[0] ?? null;
     if (!acct) return false;
-    const pat = await requestAccountPat(acct.id);
+    const pat = await requestAccountPatForAuth(acct.id);
     if (pat) {
       setToolbarAccountId(acct.id);
       if (activeRepoPath) bindRepoToAccount(activeRepoPath, acct.id);
@@ -157,15 +134,14 @@ export function ToolBar({
       return false;
     }
     if (await promptPatAndSave()) return false;
-    const open = window.confirm(`${msg}\n\nOpen Accounts to add a token?`);
-    if (open) toggleAccountManager();
+    showSyncToast("Add a PAT once in Accounts — it stays in Keychain", "err");
     return true;
   };
 
   const handlePull = async () => {
     if (!activeRepoPath || !headBranch || syncBusy) return;
     setSyncOp("pull");
-    flashSyncStatus({ kind: "busy", text: "Pulling…" });
+    showSyncToast("Pulling…", "busy");
     try {
       const clean = await pullRepoBranch(
         activeRepoPath,
@@ -175,10 +151,10 @@ export function ToolBar({
       );
       await Promise.all([refreshLog(), refreshBranches(), refreshStatus()]);
       if (!clean) {
-        flashSyncStatus({ kind: "err", text: "Pull — conflicts" });
+        showSyncToast("Pull — conflicts", "err");
         alert("Pull has conflicts — resolve in Files.");
       } else {
-        flashSyncStatus({ kind: "ok", text: "Pull done" });
+        showSyncToast("Pull complete", "ok");
       }
     } catch (e) {
       if (e instanceof SyncCancelledError) return;
@@ -192,15 +168,15 @@ export function ToolBar({
         );
         await Promise.all([refreshLog(), refreshBranches(), refreshStatus()]);
         if (!clean) {
-          flashSyncStatus({ kind: "err", text: "Pull — conflicts" });
+          showSyncToast("Pull — conflicts", "err");
           alert("Pull has conflicts — resolve in Files.");
         } else {
-          flashSyncStatus({ kind: "ok", text: "Pull done" });
+          showSyncToast("Pull complete", "ok");
         }
         return;
       } catch (retry) {
         if (retry instanceof SyncCancelledError) return;
-        flashSyncStatus({ kind: "err", text: "Pull failed" });
+        showSyncToast("Pull failed", "err");
         const msg = describeSyncError(retry);
         if (msg) alert(`Pull failed: ${msg}`);
       }
@@ -223,22 +199,22 @@ export function ToolBar({
     };
 
     setSyncOp("push");
-    flashSyncStatus({ kind: "busy", text: "Pushing…" });
+    showSyncToast("Pushing…", "busy");
     try {
       await runPush();
-      flashSyncStatus({ kind: "ok", text: "Push done" });
+      showSyncToast("Push complete", "ok");
     } catch (e) {
       if (e instanceof SyncCancelledError) return;
       if (await handleAuthSyncFailure("Push", e)) return;
       try {
         await runPush();
-        flashSyncStatus({ kind: "ok", text: "Push done" });
+        showSyncToast("Push complete", "ok");
         return;
       } catch (retryAfterPat) {
         e = retryAfterPat;
       }
 
-      flashSyncStatus({ kind: "err", text: "Push failed" });
+      showSyncToast("Push failed", "err");
       const msg = describeSyncError(e);
       if (msg) alert(`Push failed: ${msg}`);
     } finally {
@@ -284,8 +260,11 @@ export function ToolBar({
         title={active ? busyLabel : title}
         aria-busy={active}
       >
-        {active ? <IconSpinner size={14} className="toolbar-sync-spin" /> : icon}
-        <span>{active ? busyLabel : label}</span>
+        {icon}
+        <span className="inline-flex items-baseline">
+          {active ? busyLabel : label}
+          {active && <AnimatedDots />}
+        </span>
       </button>
     );
   };
@@ -352,19 +331,10 @@ export function ToolBar({
               <span>Files</span>
             </button>
           )}
-          {syncStatus && (
-            <span
-              className={`toolbar-sync-status toolbar-sync-status--${syncStatus.kind} shrink-0`}
-              role="status"
-              aria-live="polite"
-            >
-              {syncStatus.text}
-            </span>
-          )}
           <SyncGitButton
             op="fetch"
             label="Fetch"
-            busyLabel="Fetching…"
+            busyLabel="Fetching"
             title="Fetch"
             icon={<IconFetch size={14} />}
             onClick={() => void handleFetch()}
@@ -372,7 +342,7 @@ export function ToolBar({
           <SyncGitButton
             op="pull"
             label="Pull"
-            busyLabel="Pulling…"
+            busyLabel="Pulling"
             title="Pull current branch"
             icon={<IconPull size={14} />}
             onClick={() => void handlePull()}
@@ -380,7 +350,7 @@ export function ToolBar({
           <SyncGitButton
             op="push"
             label="Push"
-            busyLabel="Pushing…"
+            busyLabel="Pushing"
             title="Push"
             icon={<IconPush size={14} />}
             onClick={() => void handlePush()}

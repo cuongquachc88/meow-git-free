@@ -11,6 +11,7 @@ import { MergeDialog } from "./components/git/MergeDialog";
 import { RemoteSetupDialog } from "./components/git/RemoteSetupDialog";
 import { AccountManager } from "./components/accounts/AccountManager";
 import { AccountPatDialog } from "./components/accounts/AccountPatDialog";
+import { SyncToast } from "./components/shared/SyncToast";
 import { OpenRepoDialog } from "./components/shared/OpenRepoDialog";
 import {
   ResizeHandle,
@@ -193,6 +194,7 @@ function App() {
       <RemoteSetupDialog />
       <AccountManager />
       <AccountPatDialog />
+      <SyncToast />
       {showOpenDialog && <OpenRepoDialog onClose={() => setShowOpenDialog(false)} />}
     </div>
   );

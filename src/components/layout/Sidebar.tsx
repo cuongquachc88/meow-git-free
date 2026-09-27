@@ -222,13 +222,7 @@ export function Sidebar({ onOpenRepo, onHide }: { onOpenRepo: () => void; onHide
         )}
       </div>
 
-      <div
-        className="shrink-0 px-2 py-2 border-b"
-        style={{
-          borderColor: "var(--border)",
-          background: "linear-gradient(180deg, transparent 0%, var(--grad-1) 120%)",
-        }}
-      >
+      <div className="panel-subheader shrink-0 px-2 py-2">
         <p className="text-[10px] mb-1 px-0.5" style={{ color: "var(--text-muted)" }}>
           {q ? `Viewing ${viewingCount}` : `Viewing ${localBranches.length + remoteBranches.length + tags.length + stashes.length}`}
         </p>
