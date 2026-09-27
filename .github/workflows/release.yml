@@ -1,0 +1,102 @@
+# Build macOS DMG + Windows NSIS when a release tag is pushed, then attach artifacts to a GitHub Release.
+#
+# Usage:
+#   git tag release-v0.1.0
+#   git push origin release-v0.1.0
+#
+# Optional signing (not required for CI artifacts):
+#   APPLE_CERTIFICATE, APPLE_CERTIFICATE_PASSWORD, APPLE_SIGNING_IDENTITY, APPLE_ID, APPLE_PASSWORD, APPLE_TEAM_ID
+#   WINDOWS_CERTIFICATE, WINDOWS_CERTIFICATE_PASSWORD
+
+name: Release
+
+on:
+  push:
+    tags:
+      - "release-v*.*.*"
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  release:
+    permissions:
+      contents: write
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - platform: macos-latest
+            rust_targets: aarch64-apple-darwin
+            tauri_args: "--target aarch64-apple-darwin --bundles dmg"
+          - platform: windows-latest
+            rust_targets: ""
+            tauri_args: "--bundles nsis"
+
+    runs-on: ${{ matrix.platform }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set app version from tag
+        shell: bash
+        run: |
+          set -euo pipefail
+          TAG="${GITHUB_REF_NAME}"
+          if [[ ! "$TAG" =~ ^release-v[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            echo "Expected tag release-vMAJOR.MINOR.PATCH, got: $TAG"
+            exit 1
+          fi
+          VERSION="${TAG#release-v}"
+          echo "APP_VERSION=$VERSION" >> "$GITHUB_ENV"
+          jq --arg v "$VERSION" '.version = $v' package.json > package.json.tmp && mv package.json.tmp package.json
+          jq --arg v "$VERSION" '.version = $v' src-tauri/tauri.conf.json > src-tauri/tauri.conf.json.tmp && mv src-tauri/tauri.conf.json.tmp src-tauri/tauri.conf.json
+          perl -i -pe 's/^version = ".*"/version = "'"$VERSION"'"/' src-tauri/Cargo.toml
+
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v2
+
+      - name: Install frontend dependencies
+        run: bun install --frozen-lockfile
+
+      - name: Setup Rust
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.rust_targets }}
+
+      - name: Rust cache
+        uses: swatinem/rust-cache@v2
+        with:
+          workspaces: src-tauri
+
+      - name: Build and upload release assets
+        uses: tauri-apps/tauri-action@v0
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          # macOS code signing (optional)
+          APPLE_CERTIFICATE: ${{ secrets.APPLE_CERTIFICATE }}
+          APPLE_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
+          APPLE_SIGNING_IDENTITY: ${{ secrets.APPLE_SIGNING_IDENTITY }}
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          APPLE_PASSWORD: ${{ secrets.APPLE_PASSWORD }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+          # Windows code signing (optional)
+          WINDOWS_CERTIFICATE: ${{ secrets.WINDOWS_CERTIFICATE }}
+          WINDOWS_CERTIFICATE_PASSWORD: ${{ secrets.WINDOWS_CERTIFICATE_PASSWORD }}
+        with:
+          tagName: ${{ github.ref_name }}
+          releaseName: Meow Git ${{ github.ref_name }}
+          releaseBody: |
+            Desktop builds for **Meow Git** `${{ github.ref_name }}`.
+
+            | Platform | Asset |
+            | --- | --- |
+            | macOS (Apple Silicon) | `.dmg` |
+            | Windows | `.exe` (NSIS installer) |
+
+            Commit: ${{ github.sha }}
+          releaseDraft: false
+          prerelease: false
+          includeUpdaterJson: false
+          args: ${{ matrix.tauri_args }}

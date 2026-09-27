@@ -127,7 +127,7 @@ export function ToolBar({
     return false;
   };
 
-  const handleAuthSyncFailure = async (action: "Pull" | "Push", e: unknown): Promise<boolean> => {
+  const handleAuthSyncFailure = async (_action: "Pull" | "Push", e: unknown): Promise<boolean> => {
     const msg = describeSyncError(e);
     if (!msg) return true;
     if (!isAuthSyncError(e)) {
