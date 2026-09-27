@@ -1,0 +1,138 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512">
+  <defs>
+    <!-- Background gradient: deep navy → indigo -->
+    <radialGradient id="bgGrad" cx="50%" cy="40%" r="65%">
+      <stop offset="0%" stop-color="#1e1b4b"/>
+      <stop offset="100%" stop-color="#0d0f1a"/>
+    </radialGradient>
+    <!-- Face gradient: soft white glow -->
+    <radialGradient id="faceGrad" cx="50%" cy="45%" r="55%">
+      <stop offset="0%" stop-color="#e8e8f4"/>
+      <stop offset="100%" stop-color="#c4c4d8"/>
+    </radialGradient>
+    <!-- Inner ear gradient -->
+    <linearGradient id="earInner" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#a78bfa"/>
+      <stop offset="100%" stop-color="#7c3aed"/>
+    </linearGradient>
+    <!-- Eye gradient -->
+    <radialGradient id="eyeGrad" cx="35%" cy="35%" r="60%">
+      <stop offset="0%" stop-color="#818cf8"/>
+      <stop offset="100%" stop-color="#4338ca"/>
+    </radialGradient>
+    <!-- Nose gradient -->
+    <radialGradient id="noseGrad" cx="40%" cy="30%" r="70%">
+      <stop offset="0%" stop-color="#f9a8d4"/>
+      <stop offset="100%" stop-color="#ec4899"/>
+    </radialGradient>
+    <!-- Subtle glow filter -->
+    <filter id="glow" x="-20%" y="-20%" width="140%" height="140%">
+      <feGaussianBlur stdDeviation="6" result="blur"/>
+      <feMerge><feMergeNode in="blur"/><feMergeNode in="SourceGraphic"/></feMerge>
+    </filter>
+    <!-- Soft shadow for face -->
+    <filter id="faceShadow" x="-15%" y="-10%" width="130%" height="130%">
+      <feDropShadow dx="0" dy="4" stdDeviation="12" flood-color="#0d0f1a" flood-opacity="0.5"/>
+    </filter>
+  </defs>
+
+  <!-- Background rounded rect -->
+  <rect width="512" height="512" rx="112" fill="url(#bgGrad)"/>
+
+  <!-- Subtle grid dots (git graph feel) -->
+  <g opacity="0.06" fill="#818cf8">
+    <circle cx="80" cy="80" r="3"/>
+    <circle cx="160" cy="80" r="3"/>
+    <circle cx="80" cy="160" r="3"/>
+    <circle cx="432" cy="432" r="3"/>
+    <circle cx="352" cy="432" r="3"/>
+    <circle cx="432" cy="352" r="3"/>
+  </g>
+
+  <!-- Git branch lines as subtle background decoration -->
+  <g opacity="0.12" stroke="#818cf8" stroke-width="2" fill="none" stroke-linecap="round">
+    <!-- vertical branch -->
+    <line x1="80" y1="80" x2="80" y2="280"/>
+    <!-- branch off -->
+    <path d="M80 160 Q130 160 130 200 L130 320"/>
+    <!-- node dots -->
+    <circle cx="80" cy="80" r="5" fill="#818cf8" stroke="none"/>
+    <circle cx="80" cy="160" r="4" fill="#818cf8" stroke="none"/>
+    <circle cx="130" cy="240" r="4" fill="#a78bfa" stroke="none"/>
+    <circle cx="80" cy="280" r="5" fill="#818cf8" stroke="none"/>
+    <!-- right side -->
+    <line x1="432" y1="240" x2="432" y2="440"/>
+    <path d="M432 300 Q382 300 382 340 L382 440"/>
+    <circle cx="432" cy="240" r="5" fill="#818cf8" stroke="none"/>
+    <circle cx="432" cy="300" r="4" fill="#818cf8" stroke="none"/>
+    <circle cx="382" cy="370" r="4" fill="#a78bfa" stroke="none"/>
+    <circle cx="432" cy="440" r="5" fill="#818cf8" stroke="none"/>
+  </g>
+
+  <!-- ── CAT FACE ── -->
+  <!-- Left ear (outer) -->
+  <polygon points="148,220 178,130 248,200" fill="url(#faceGrad)" filter="url(#faceShadow)"/>
+  <!-- Right ear (outer) -->
+  <polygon points="364,220 334,130 264,200" fill="url(#faceGrad)"/>
+  <!-- Left ear (inner) -->
+  <polygon points="158,212 182,148 235,198" fill="url(#earInner)" opacity="0.85"/>
+  <!-- Right ear (inner) -->
+  <polygon points="354,212 330,148 277,198" fill="url(#earInner)" opacity="0.85"/>
+
+  <!-- Face circle -->
+  <circle cx="256" cy="300" r="130" fill="url(#faceGrad)" filter="url(#faceShadow)"/>
+
+  <!-- ── EYES ── -->
+  <!-- Left eye white -->
+  <ellipse cx="210" cy="276" rx="28" ry="30" fill="white"/>
+  <!-- Right eye white -->
+  <ellipse cx="302" cy="276" rx="28" ry="30" fill="white"/>
+  <!-- Left iris -->
+  <ellipse cx="210" cy="278" rx="19" ry="22" fill="url(#eyeGrad)"/>
+  <!-- Right iris -->
+  <ellipse cx="302" cy="278" rx="19" ry="22" fill="url(#eyeGrad)"/>
+  <!-- Left pupil -->
+  <ellipse cx="210" cy="280" rx="10" ry="16" fill="#0d0f1a"/>
+  <!-- Right pupil -->
+  <ellipse cx="302" cy="280" rx="10" ry="16" fill="#0d0f1a"/>
+  <!-- Eye shine left -->
+  <circle cx="216" cy="272" r="5" fill="white" opacity="0.9"/>
+  <!-- Eye shine right -->
+  <circle cx="308" cy="272" r="5" fill="white" opacity="0.9"/>
+
+  <!-- ── NOSE ── -->
+  <polygon points="256,310 244,324 268,324" fill="url(#noseGrad)"/>
+
+  <!-- ── MOUTH ── -->
+  <path d="M244,324 Q238,336 230,338" stroke="#c084fc" stroke-width="2.5" fill="none" stroke-linecap="round"/>
+  <path d="M268,324 Q274,336 282,338" stroke="#c084fc" stroke-width="2.5" fill="none" stroke-linecap="round"/>
+
+  <!-- ── WHISKERS (git branch style) ── -->
+  <!-- Left whiskers — straight lines like git graph lanes -->
+  <g stroke="#6366f1" stroke-width="2" stroke-linecap="round" opacity="0.7">
+    <line x1="235" y1="318" x2="128" y2="308"/>
+    <line x1="235" y1="325" x2="128" y2="328"/>
+    <line x1="235" y1="332" x2="130" y2="348"/>
+    <!-- branch dot on left whisker -->
+    <circle cx="165" cy="312" r="3" fill="#818cf8" stroke="none"/>
+    <circle cx="158" cy="332" r="3" fill="#a78bfa" stroke="none"/>
+  </g>
+  <!-- Right whiskers -->
+  <g stroke="#6366f1" stroke-width="2" stroke-linecap="round" opacity="0.7">
+    <line x1="277" y1="318" x2="384" y2="308"/>
+    <line x1="277" y1="325" x2="384" y2="328"/>
+    <line x1="277" y1="332" x2="382" y2="348"/>
+    <!-- branch dot on right whisker -->
+    <circle cx="347" cy="312" r="3" fill="#818cf8" stroke="none"/>
+    <circle cx="354" cy="332" r="3" fill="#a78bfa" stroke="none"/>
+  </g>
+
+  <!-- ── FOREHEAD MARKINGS (subtle M-stripe) ── -->
+  <g stroke="#b8b8cc" stroke-width="1.5" stroke-linecap="round" opacity="0.35" fill="none">
+    <path d="M230,222 Q240,210 256,218 Q272,210 282,222"/>
+    <line x1="256" y1="218" x2="256" y2="230"/>
+  </g>
+
+  <!-- Subtle rim light on face -->
+  <circle cx="256" cy="300" r="130" fill="none" stroke="rgba(165,180,252,0.15)" stroke-width="1.5"/>
+</svg>
