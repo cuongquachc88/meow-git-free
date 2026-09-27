@@ -6,9 +6,11 @@ import { diffKind } from "../../lib/diffKind";
 import { openBranchName } from "../../lib/headBranch";
 import { MergeConflictResolver } from "../git/MergeConflictResolver";
 import { useUIStore } from "../../store/uiStore";
+import { openFileInCenter, openFilePathInCenter } from "../../lib/openFileInCenter";
+import { diffFilePath } from "../../lib/mergeWorkingDiffs";
+import type { FileDiff } from "../../types/git";
 import { joinCommitMessage, messageFromHeadCommit } from "../git/CommitMessageFields";
 import { CommitComposeSection } from "../git/CommitComposeSection";
-import { DiffViewer } from "./DiffViewer";
 import { IconFileStatus, type FileChangeKind } from "../shared/icons/GitIcons";
 
 const STATUS_CONFIG: Record<string, { label: string; color: string; bg: string }> = {
@@ -105,19 +107,33 @@ function CommitHeader() {
           {statParts.join(" · ")}
         </p>
       )}
-      <p className="text-[10px]" style={{ color: "var(--text-faint)" }}>Click a file to view diff</p>
+      <p className="text-[10px]" style={{ color: "var(--text-faint)" }}>Click a file — diff opens in the center</p>
     </div>
   );
 }
 
-function DiffFileList({ compact }: { compact?: boolean }) {
-  const { activeDiffs, selectedDiff, setSelectedDiff } = useRepoStore();
+function DiffFileList() {
+  const { activeRepoPath, activeDiffs, selectedCommit, selectedDiff, setSelectedDiff } = useRepoStore();
+  const openCenterFileView = useUIStore((s) => s.openCenterFileView);
+  const selectedPath = selectedDiff ? diffFilePath(selectedDiff) : undefined;
+
+  const openDiff = (d: FileDiff) => {
+    const path = diffFilePath(d);
+    if (path) {
+      void openFilePathInCenter(path, {
+        activeRepoPath,
+        activeDiffs,
+        selectedCommit,
+        setSelectedDiff,
+        openCenterFileView,
+      });
+      return;
+    }
+    openFileInCenter(d, setSelectedDiff, openCenterFileView, "diff");
+  };
 
   return (
-    <div
-      className={`flex flex-col min-h-0 overflow-hidden ${compact ? "shrink-0 max-h-[38%] border-b" : "flex-1"}`}
-      style={compact ? { borderColor: "var(--border)" } : undefined}
-    >
+    <div className="flex flex-col flex-1 min-h-0 overflow-hidden">
       <div className="shrink-0 flex items-center justify-between px-3 py-2 border-b" style={{ borderColor: "var(--border)" }}>
         <span className="text-[10px] font-semibold uppercase tracking-wider" style={{ color: "var(--text-faint)" }}>
           Files
@@ -129,13 +145,13 @@ function DiffFileList({ compact }: { compact?: boolean }) {
           const path = d.newPath ?? d.oldPath ?? "?";
           const filename = path.split("/").pop() ?? path;
           const dir = path.includes("/") ? path.substring(0, path.lastIndexOf("/")) : "";
-          const isSelected = selectedDiff === d;
+          const isSelected = selectedPath === path;
           const kind = diffKind(d);
 
           return (
             <div
               key={path}
-              onClick={() => setSelectedDiff(d)}
+              onClick={() => openDiff(d)}
               className="flex items-center gap-2.5 px-3 py-1.5 cursor-pointer transition-colors"
               style={{
                 background: isSelected ? "var(--accent-bg)" : undefined,
@@ -224,7 +240,12 @@ function WorkingTreeCommitForm() {
 }
 
 function WorkingTreePanel() {
-  const { activeRepoPath, status, refreshStatus, refreshDiffs, setSelectedDiff, activeDiffs, selectedCommit, selectedDiff } = useRepoStore();
+  const { activeRepoPath, status, refreshStatus, refreshDiffs, setSelectedDiff, activeDiffs, selectedCommit } =
+    useRepoStore();
+  const openCenterFileView = useUIStore((s) => s.openCenterFileView);
+  const selectedPath = useRepoStore((s) =>
+    s.selectedDiff ? diffFilePath(s.selectedDiff) : undefined,
+  );
   const [search, setSearch] = useState("");
 
   useEffect(() => {
@@ -250,8 +271,13 @@ function WorkingTreePanel() {
   };
 
   const handleFileClick = (path: string) => {
-    const diff = activeDiffs.find((d) => (d.newPath ?? d.oldPath) === path);
-    if (diff) setSelectedDiff(diff);
+    void openFilePathInCenter(path, {
+      activeRepoPath,
+      activeDiffs,
+      selectedCommit,
+      setSelectedDiff,
+      openCenterFileView,
+    });
   };
 
   const totalChanges = status.length;
@@ -263,7 +289,7 @@ function WorkingTreePanel() {
         <p className="text-[11px] mt-0.5" style={{ color: "var(--text-muted)" }}>
           {totalChanges === 0 ? "Working tree clean" : `${totalChanges} file${totalChanges === 1 ? "" : "s"} changed`}
         </p>
-        <p className="text-[10px] mt-2" style={{ color: "var(--text-faint)" }}>Click a file to view diff</p>
+        <p className="text-[10px] mt-2" style={{ color: "var(--text-faint)" }}>Click a file — diff opens in the center</p>
       </div>
 
       <div className="shrink-0 px-3 py-2 border-b" style={{ borderColor: "var(--border)" }}>
@@ -298,6 +324,7 @@ function WorkingTreePanel() {
               <WorkingFileRow
                 key={f.path}
                 path={f.path}
+                selected={selectedPath === f.path}
                 badge={cfg.label}
                 actionTitle="Unstage"
                 onAction={() => handleUnstage(f.path)}
@@ -310,7 +337,7 @@ function WorkingTreePanel() {
 
       <div className="shrink-0 mx-3 my-1" style={{ height: 1, background: "var(--border)" }} />
 
-      <div className={`flex flex-col min-h-0 ${selectedDiff ? "shrink-0 max-h-[32%]" : "flex-1"}`}>
+      <div className="flex flex-col min-h-0 flex-1">
         <div className="shrink-0 px-3 pt-1 pb-1">
           <span className="text-[10px] font-semibold uppercase tracking-wider" style={{ color: "var(--text-faint)" }}>
             Unstaged ({unstaged.length})
@@ -324,6 +351,7 @@ function WorkingTreePanel() {
               <WorkingFileRow
                 key={f.path}
                 path={f.path}
+                selected={selectedPath === f.path}
                 badge={cfg.label}
                 actionTitle="Stage"
                 onAction={() => handleStage(f.path)}
@@ -334,22 +362,6 @@ function WorkingTreePanel() {
         </div>
       </div>
 
-      <CommitDiffPane />
-    </div>
-  );
-}
-
-function CommitDiffPane() {
-  const { selectedDiff, setSelectedDiff } = useRepoStore();
-  const openCenterFileView = useUIStore((s) => s.openCenterFileView);
-  if (!selectedDiff) return null;
-  return (
-    <div className="flex flex-col flex-1 min-h-[140px] border-t overflow-hidden" style={{ borderColor: "var(--border)" }}>
-      <DiffViewer
-        variant="panel"
-        onCollapse={() => setSelectedDiff(null)}
-        onRequestBlameFullscreen={() => openCenterFileView("blame")}
-      />
     </div>
   );
 }
@@ -357,12 +369,14 @@ function CommitDiffPane() {
 function WorkingFileRow({
   path,
   badge,
+  selected,
   actionTitle,
   onAction,
   onClick,
 }: {
   path: string;
   badge: string;
+  selected?: boolean;
   actionTitle: string;
   onAction: () => void;
   onClick: () => void;
@@ -373,6 +387,10 @@ function WorkingFileRow({
   return (
     <div
       className="flex items-center gap-2 px-3 py-1 hover:bg-[color:var(--bg-hover)] group cursor-pointer"
+      style={{
+        background: selected ? "var(--accent-bg)" : undefined,
+        borderLeft: `2px solid ${selected ? "var(--accent)" : "transparent"}`,
+      }}
       onClick={onClick}
     >
       <IconFileStatus kind={statusToFileKind(badge === "A" ? "added" : badge === "D" ? "deleted" : badge === "R" ? "renamed" : badge === "!" ? "conflicted" : badge === "?" ? "untracked" : "modified")} />
@@ -393,7 +411,7 @@ function WorkingFileRow({
 }
 
 export function ChangesPanel() {
-  const { selectedCommit, selectedDiff } = useRepoStore();
+  const { selectedCommit } = useRepoStore();
 
   return (
     <div className="flex flex-col h-full overflow-hidden" style={{ background: "var(--bg-base)" }}>
@@ -402,10 +420,7 @@ export function ChangesPanel() {
         {selectedCommit ? (
           <>
             <CommitHeader />
-            <div className="flex flex-col flex-1 min-h-0 overflow-hidden">
-              <DiffFileList compact={!!selectedDiff} />
-              <CommitDiffPane />
-            </div>
+            <DiffFileList />
           </>
         ) : (
           <WorkingTreePanel />

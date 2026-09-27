@@ -56,16 +56,30 @@ pub fn fetch_remote(path: &str, remote_name: &str) -> Result<()> {
 }
 
 fn default_credentials(
-    _url: &str,
+    url: &str,
     username_from_url: Option<&str>,
-    _allowed_types: git2::CredentialType,
+    allowed_types: git2::CredentialType,
 ) -> Result<git2::Cred, git2::Error> {
-    if let Some(username) = username_from_url {
-        if let Ok(cred) = git2::Cred::ssh_key_from_agent(username) {
+    if allowed_types.is_ssh_key() || allowed_types.is_username() {
+        if let Some(username) = username_from_url {
+            if let Ok(cred) = git2::Cred::ssh_key_from_agent(username) {
+                return Ok(cred);
+            }
+        }
+    }
+    if allowed_types.is_default() || allowed_types.is_user_pass_plaintext() {
+        if let Ok(cred) = git2::Cred::default() {
             return Ok(cred);
         }
     }
-    git2::Cred::default()
+    if allowed_types.is_user_pass_plaintext() {
+        if let Some(username) = username_from_url {
+            return git2::Cred::username(username);
+        }
+    }
+    Err(git2::Error::from_str(&format!(
+        "no credentials available for {url}"
+    )))
 }
 
 /// Fetch using an explicit username + PAT token (for multiple-account support)
@@ -94,6 +108,19 @@ pub fn push_with_token(path: &str, remote_name: &str, branch: &str, username: &s
     callbacks.credentials(move |_url, _username, _allowed| {
         git2::Cred::userpass_plaintext(&user, &tok)
     });
+    let mut push_opts = git2::PushOptions::new();
+    push_opts.remote_callbacks(callbacks);
+    let refspec = format!("refs/heads/{}:refs/heads/{}", branch, branch);
+    remote.push(&[&refspec], Some(&mut push_opts))?;
+    Ok(())
+}
+
+/// Push using SSH agent / system credential helper (same as fetch).
+pub fn push_branch(path: &str, remote_name: &str, branch: &str) -> Result<()> {
+    let repo = Repository::open(path)?;
+    let mut remote = repo.find_remote(remote_name)?;
+    let mut callbacks = git2::RemoteCallbacks::new();
+    callbacks.credentials(default_credentials);
     let mut push_opts = git2::PushOptions::new();
     push_opts.remote_callbacks(callbacks);
     let refspec = format!("refs/heads/{}:refs/heads/{}", branch, branch);

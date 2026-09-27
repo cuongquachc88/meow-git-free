@@ -12,7 +12,8 @@
     "test:watch": "vitest",
     "test:rust": "cargo test --manifest-path src-tauri/Cargo.toml",
     "test:all": "bun run test && bun run test:rust",
-    "tauri": "tauri"
+    "tauri": "tauri",
+    "icon:app": "tauri icon src-tauri/icons/icon.svg -o src-tauri/icons && rsvg-convert -w 128 -h 128 src-tauri/icons/icon.svg -o src/assets/app-icon.png"
   },
   "dependencies": {
     "@monaco-editor/react": "^4.7.0",

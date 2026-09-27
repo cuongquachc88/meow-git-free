@@ -3,6 +3,8 @@ import type { BranchInfo, CommitInfo, FileDiff, FileStatus, RepoInfo } from "../
 import { git } from "../ipc/git";
 import { openBranchName } from "../lib/headBranch";
 
+import { diffFilePath, mergeWorkingDiffs } from "../lib/mergeWorkingDiffs";
+
 function withSyncedHeadBranch(repos: RepoInfo[], activeRepoPath: string | null, branches: BranchInfo[]) {
   if (!activeRepoPath) return repos;
   const head = openBranchName(branches);
@@ -125,15 +127,23 @@ export const useRepoStore = create<RepoStore>((set, get) => ({
   },
 
   refreshDiffs: async () => {
-    const { activeRepoPath, selectedCommit } = get();
+    const { activeRepoPath, selectedCommit, selectedDiff } = get();
     if (!activeRepoPath) return;
     try {
       const result = selectedCommit
         ? await git.diffCommit(activeRepoPath, selectedCommit.id)
-        : await git.diffWorkdir(activeRepoPath);
-      set({ activeDiffs: result, selectedDiff: null });
+        : mergeWorkingDiffs(
+            await git.diffStaged(activeRepoPath),
+            await git.diffWorkdir(activeRepoPath),
+          );
+      const prevPath = selectedDiff ? diffFilePath(selectedDiff) : undefined;
+      const nextSelected =
+        prevPath != null
+          ? (result.find((d) => diffFilePath(d) === prevPath) ?? null)
+          : null;
+      set({ activeDiffs: result, selectedDiff: nextSelected });
     } catch {
-      set({ activeDiffs: [] });
+      set({ activeDiffs: [], selectedDiff: null });
     }
   },
 

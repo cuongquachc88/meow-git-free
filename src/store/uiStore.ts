@@ -14,6 +14,9 @@ interface UIStore {
   mergeDialogSource: string | null;
   branchDialogFromRef: string | null;
   isAccountManagerOpen: boolean;
+  isRemoteSetupOpen: boolean;
+  remoteSetupDefaultRepoName: string;
+  remoteSetupResolve: ((success: boolean) => void) | null;
   /** Full-width center viewer over commit graph (blame / diff). */
   centerFileView: null | "diff" | "blame";
 
@@ -45,6 +48,9 @@ export const useUIStore = create<UIStore>((set) => ({
   mergeDialogSource: null,
   branchDialogFromRef: null,
   isAccountManagerOpen: false,
+  isRemoteSetupOpen: false,
+  remoteSetupDefaultRepoName: "",
+  remoteSetupResolve: null,
   centerFileView: null,
 
   setTheme: (theme) => {

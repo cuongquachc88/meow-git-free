@@ -2,6 +2,7 @@ import { create } from "zustand";
 import { persist } from "zustand/middleware";
 import type { Account } from "../types/accounts";
 import { accounts as accountsIpc } from "../ipc/accounts";
+import { normalizeRepoPath } from "../lib/repoPath";
 
 interface AccountStore {
   accounts: Account[];
@@ -34,14 +35,17 @@ export const useAccountStore = create<AccountStore>()(
         }));
       },
 
-      bindRepoToAccount: (repoPath, accountId) =>
+      bindRepoToAccount: (repoPath, accountId) => {
+        const key = normalizeRepoPath(repoPath);
         set((s) => ({
-          repoAccountMap: { ...s.repoAccountMap, [repoPath]: accountId },
-        })),
+          repoAccountMap: { ...s.repoAccountMap, [key]: accountId },
+        }));
+      },
 
       getAccountForRepo: (repoPath) => {
         const { accounts, repoAccountMap } = get();
-        const id = repoAccountMap[repoPath];
+        const key = normalizeRepoPath(repoPath);
+        const id = repoAccountMap[key] ?? repoAccountMap[repoPath];
         return accounts.find((a) => a.id === id) ?? null;
       },
     }),

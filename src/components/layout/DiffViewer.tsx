@@ -1,5 +1,6 @@
 import { useEffect, useState, useMemo } from "react";
 import { useRepoStore } from "../../store/repoStore";
+import { useUIStore } from "../../store/uiStore";
 import { git } from "../../ipc/git";
 import type { FileDiff, DiffLine, BlameLine } from "../../types/git";
 import { formatDistanceToNow } from "date-fns";
@@ -39,6 +40,7 @@ export function DiffViewer({
   onRequestBlameFullscreen?: () => void;
 }) {
   const { activeRepoPath, activeDiffs, selectedDiff, setSelectedDiff } = useRepoStore();
+  const openCenterFileView = useUIStore((s) => s.openCenterFileView);
   const [mode, setMode] = useState<ViewMode>("diff");
   const [blameLines, setBlameLines] = useState<BlameLine[]>([]);
   const [blameLoading, setBlameLoading] = useState(false);
@@ -75,6 +77,10 @@ export function DiffViewer({
   const setViewMode = (next: ViewMode) => {
     if (next === "blame" && panelMode && onRequestBlameFullscreen) {
       onRequestBlameFullscreen();
+      return;
+    }
+    if (centerMode && next !== activeMode) {
+      openCenterFileView(next);
       return;
     }
     setMode(next);
@@ -157,7 +163,7 @@ export function DiffViewer({
 
         {/* Mode toggle + expand button */}
         <div className="flex items-center gap-1 pl-1 pr-0.5 shrink-0">
-          {selected && !selected.isBinary && !forcedMode && (
+          {selected && !selected.isBinary && (!forcedMode || centerMode) && (
             <>
               <button
                 type="button"

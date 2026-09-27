@@ -6,6 +6,7 @@ import { useAccountStore } from "../../store/accountStore";
 import { getBoundToken, pullBranch, pushBranch } from "../../lib/remoteSync";
 import { git } from "../../ipc/git";
 import type { BranchInfo } from "../../types/git";
+import { APP_VERSION } from "../../constants/appVersion";
 import { PANEL_HEADER_H } from "../../constants/layout";
 import { openBranchName } from "../../lib/headBranch";
 import {
@@ -402,6 +403,12 @@ export function Sidebar({ onOpenRepo, onHide }: { onOpenRepo: () => void; onHide
             Close repository
           </button>
         )}
+        <p
+          className="text-[10px] text-center pt-1 pb-0.5 font-mono tracking-wide select-none"
+          style={{ color: "var(--text-faint)" }}
+        >
+          Meow Git v{APP_VERSION}
+        </p>
       </div>
     </aside>
   );
@@ -545,14 +552,12 @@ function BranchContextMenu({
     <>
       <div className="fixed inset-0 z-[300]" onClick={onClose} />
       <div
-        className="fixed z-[301] py-1 rounded-lg shadow-lg"
+        className="fixed z-[301] py-1 rounded-lg glass-context-menu"
         style={{
           left,
           top,
           width: menuW,
           maxWidth: "min(260px, calc(100vw - 16px))",
-          background: "var(--bg-surface-2)",
-          border: "1px solid var(--border-strong)",
         }}
         onClick={(e) => e.stopPropagation()}
       >
@@ -570,7 +575,7 @@ function BranchContextMenu({
             disabled={item.disabled}
             title={item.label}
             onClick={item.onClick}
-            className="w-full text-left px-2.5 py-1.5 text-[11px] truncate disabled:opacity-40"
+            className="w-full text-left px-2.5 py-1.5 text-[11px] truncate disabled:opacity-40 hover:bg-[color:var(--bg-hover)]"
             style={{ color: item.danger ? "rgba(239,68,68,0.9)" : "var(--text-secondary)" }}
           >
             {item.label}

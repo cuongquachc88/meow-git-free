@@ -56,6 +56,8 @@ export const git = {
     invoke<void>("push_with_token", { path, remoteName, branch, username, token }),
   pullBranch: (path: string, remoteName: string, branch: string) =>
     invoke<boolean>("pull_branch", { path, remoteName, branch }),
+  pushBranch: (path: string, remoteName: string, branch: string) =>
+    invoke<void>("push_branch", { path, remoteName, branch }),
   pullWithToken: (path: string, remoteName: string, branch: string, username: string, token: string) =>
     invoke<boolean>("pull_with_token", { path, remoteName, branch, username, token }),
 

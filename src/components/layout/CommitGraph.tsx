@@ -149,7 +149,7 @@ function CommitContextMenu({
         onContextMenu={(e) => { e.preventDefault(); onClose(); }}
       />
       <div
-        className="fixed glass-panel rounded-xl py-1 shadow-lg"
+        className="fixed glass-context-menu rounded-xl py-1"
         style={{
           pointerEvents: "auto",
           zIndex: 1,
@@ -158,8 +158,6 @@ function CommitContextMenu({
           width: MENU_W,
           maxHeight: MENU_H,
           overflowY: "auto",
-          background: "var(--bg-surface-2)",
-          border: "1px solid var(--border-strong)",
         }}
         onClick={(e) => e.stopPropagation()}
         onContextMenu={(e) => e.preventDefault()}

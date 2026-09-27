@@ -3,6 +3,7 @@ mod accounts;
 mod ssh;
 mod fs;
 mod commands;
+mod macos_icon;
 
 use commands::{
     account_commands::*,
@@ -52,6 +53,7 @@ pub fn run() {
             fetch_remote,
             fetch_with_token,
             push_with_token,
+            push_branch,
             pull_branch,
             pull_with_token,
             // merge / rebase / reset
@@ -81,6 +83,11 @@ pub fn run() {
             add_key_to_agent,
             list_agent_keys,
         ])
-        .run(tauri::generate_context!())
-        .expect("error while running tauri application");
+        .build(tauri::generate_context!())
+        .expect("error while building tauri application")
+        .run(|_app, event| {
+            if matches!(event, tauri::RunEvent::Ready) {
+                macos_icon::refresh_dock_icon_from_embedded_png();
+            }
+        });
 }

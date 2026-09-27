@@ -152,6 +152,11 @@ pub fn push_with_token(path: String, remote_name: String, branch: String, userna
 }
 
 #[tauri::command]
+pub fn push_branch(path: String, remote_name: String, branch: String) -> Result<(), String> {
+    remotes::push_branch(&path, &remote_name, &branch).map_err(|e| e.to_string())
+}
+
+#[tauri::command]
 pub fn pull_branch(path: String, remote_name: String, branch: String) -> Result<bool, String> {
     remotes::pull_branch(&path, &remote_name, &branch).map_err(|e| e.to_string())
 }

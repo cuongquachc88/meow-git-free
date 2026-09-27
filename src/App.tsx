@@ -22,11 +22,13 @@ import { git } from "./ipc/git";
 export const openRepoCallbacks: Array<() => void> = [];
 
 import { PANEL_HEADER_H } from "./constants/layout";
+import { AppLogo } from "./components/shared/AppLogo";
 
 function App() {
   const { activeRepoPath, selectedCommit, selectedDiff } = useRepoStore();
   const centerFileView = useUIStore((s) => s.centerFileView);
   const closeCenterFileView = useUIStore((s) => s.closeCenterFileView);
+
   const [showOpenDialog, setShowOpenDialog] = useState(false);
   const [sidebarVisible, setSidebarVisible] = useState(true);
   const [bottomVisible, setBottomVisible] = useState(false);
@@ -116,10 +118,10 @@ function App() {
                 onClick={() => setBottomVisible((v) => !v)}
                 className="shrink-0 flex flex-col items-center justify-center gap-1 w-5 border-l transition-colors"
                 style={{ background: "var(--bg-surface)", borderColor: "var(--border)", color: "var(--text-faint)" }}
-                title={bottomVisible ? "Hide panel" : "Show Files & Diff"}
+                title={bottomVisible ? "Hide panel" : "Show Files panel"}
               >
                 <span style={{ fontSize: 8, writingMode: "vertical-rl", textOrientation: "mixed", letterSpacing: "0.06em", textTransform: "uppercase" }}>
-                  {bottomVisible ? "▶" : "◀"} Files & Diff
+                  {bottomVisible ? "▶" : "◀"} Files
                 </span>
               </button>
 
@@ -143,7 +145,7 @@ function App() {
                       }}
                     >
                       <span className="text-[12px] font-semibold flex-1 truncate" style={{ color: "var(--text-primary)" }}>
-                        Files &amp; diff
+                        Files
                       </span>
                       <button
                         type="button"
@@ -205,18 +207,13 @@ function WelcomeScreen({ onOpenRepo }: { onOpenRepo: () => void }) {
   return (
     <div className="flex-1 flex items-center justify-center">
       <div className="text-center" style={{ maxWidth: 480 }}>
-        {/* SVG cat — no image loading needed */}
-        <div className="mx-auto mb-8" style={{ width: 88, height: 88 }}>
-          <div
-            className="w-full h-full rounded-3xl flex items-center justify-center"
+        <div className="mx-auto mb-8" style={{ width: 96, height: 96 }}>
+          <AppLogo
+            size={96}
             style={{
-              background: "linear-gradient(135deg, rgba(99,102,241,0.35) 0%, rgba(168,85,247,0.25) 100%)",
-              border: "1px solid rgba(129,140,248,0.3)",
-              boxShadow: "0 0 40px rgba(99,102,241,0.2), inset 0 1px 0 rgba(255,255,255,0.15)",
+              filter: "drop-shadow(0 12px 28px rgba(0,0,0,0.35))",
             }}
-          >
-            <CatSVG />
-          </div>
+          />
         </div>
 
         <h1 className="text-[32px] font-bold tracking-tight mb-2" style={{ color: "var(--text-primary)" }}>
@@ -255,34 +252,6 @@ function WelcomeScreen({ onOpenRepo }: { onOpenRepo: () => void }) {
         </div>
       </div>
     </div>
-  );
-}
-
-function CatSVG() {
-  return (
-    <svg width="50" height="50" viewBox="0 0 52 52" fill="none">
-      <path d="M10 20 L6 6 L18 14 Z" fill="rgba(129,140,248,0.85)" />
-      <path d="M42 20 L46 6 L34 14 Z" fill="rgba(129,140,248,0.85)" />
-      <path d="M11 18 L8 9 L17 15 Z" fill="rgba(168,85,247,0.5)" />
-      <path d="M41 18 L44 9 L35 15 Z" fill="rgba(168,85,247,0.5)" />
-      <ellipse cx="26" cy="28" rx="18" ry="16" fill="rgba(129,140,248,0.9)" />
-      <ellipse cx="19" cy="25" rx="3.5" ry="4" fill="white" />
-      <ellipse cx="33" cy="25" rx="3.5" ry="4" fill="white" />
-      <circle cx="20" cy="26" r="2" fill="#1e1b4b" />
-      <circle cx="34" cy="26" r="2" fill="#1e1b4b" />
-      <circle cx="21" cy="25" r="0.8" fill="white" opacity="0.8" />
-      <circle cx="35" cy="25" r="0.8" fill="white" opacity="0.8" />
-      <ellipse cx="26" cy="31" rx="2" ry="1.2" fill="rgba(236,72,153,0.8)" />
-      <path d="M23 33 Q26 36 29 33" stroke="rgba(255,255,255,0.5)" strokeWidth="1" fill="none" strokeLinecap="round" />
-      <line x1="5" y1="28" x2="18" y2="30" stroke="rgba(255,255,255,0.35)" strokeWidth="1" />
-      <line x1="5" y1="31" x2="18" y2="31.5" stroke="rgba(255,255,255,0.35)" strokeWidth="1" />
-      <circle cx="5" cy="28" r="1.5" fill="rgba(129,140,248,0.7)" />
-      <circle cx="5" cy="31" r="1.5" fill="rgba(129,140,248,0.7)" />
-      <line x1="47" y1="28" x2="34" y2="30" stroke="rgba(255,255,255,0.35)" strokeWidth="1" />
-      <line x1="47" y1="31" x2="34" y2="31.5" stroke="rgba(255,255,255,0.35)" strokeWidth="1" />
-      <circle cx="47" cy="28" r="1.5" fill="rgba(52,211,153,0.7)" />
-      <circle cx="47" cy="31" r="1.5" fill="rgba(52,211,153,0.7)" />
-    </svg>
   );
 }
 

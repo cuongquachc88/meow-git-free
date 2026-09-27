@@ -23,7 +23,9 @@
   --glass-sidebar:  rgba(10,12,24,0.75);
   --glass-toolbar:  rgba(13,15,28,0.82);
   --glass-panel:    rgba(18,20,38,0.88);
+  --glass-context:  rgba(10,12,22,0.42);
   --glass-blur:     blur(24px) saturate(180%);
+  --glass-context-blur: blur(28px) saturate(180%);
 
   --rim-top:        rgba(255,255,255,0.18);
   --rim-bot:        rgba(0,0,0,0.12);
@@ -68,7 +70,9 @@
   --glass-sidebar:  rgba(232,234,248,0.88);
   --glass-toolbar:  rgba(240,242,252,0.92);
   --glass-panel:    rgba(255,255,255,0.92);
+  --glass-context:  rgba(255,255,255,0.58);
   --glass-blur:     blur(24px) saturate(160%);
+  --glass-context-blur: blur(28px) saturate(160%);
 
   --rim-top:        rgba(255,255,255,0.95);
   --rim-bot:        rgba(0,0,0,0.04);
@@ -164,6 +168,17 @@ body {
   pointer-events: none;
 }
 
+/* Context menus — lighter glass so graph / list shows through */
+.glass-context-menu {
+  background: var(--glass-context);
+  backdrop-filter: var(--glass-context-blur);
+  -webkit-backdrop-filter: var(--glass-context-blur);
+  border: 1px solid var(--border-strong);
+  box-shadow:
+    inset 0 1px 0 var(--rim-top),
+    0 12px 36px rgba(0, 0, 0, 0.28);
+}
+
 /* ─── Glass Button ─── */
 .glass-btn {
   background: var(--bg-surface);
@@ -226,6 +241,57 @@ body {
 select.glass-input {
   line-height: 1.2;
   appearance: auto;
+}
+
+/* Toolbar: Files, account select, Fetch/Push, … — same height, pill shape */
+.glass-toolbar .toolbar-control {
+  box-sizing: border-box;
+  height: 28px;
+  min-height: 28px;
+  max-height: 28px;
+  padding-top: 0;
+  padding-bottom: 0;
+  line-height: 1;
+  font-size: 11px;
+  border-radius: 9999px;
+}
+.glass-toolbar .glass-btn.toolbar-control {
+  padding-left: 10px;
+  padding-right: 10px;
+  box-shadow: inset 0 1px 0 var(--rim-top), 0 2px 6px rgba(0, 0, 0, 0.1);
+}
+.glass-toolbar select.toolbar-control.glass-input {
+  width: auto;
+  min-width: 7.5rem;
+  max-width: 11rem;
+  padding: 0 1.75rem 0 10px;
+  font-size: 11px;
+  line-height: 28px;
+  color: var(--text-secondary);
+  cursor: pointer;
+  appearance: none;
+  -webkit-appearance: none;
+  box-shadow: inset 0 1px 0 var(--rim-top), 0 2px 6px rgba(0, 0, 0, 0.1);
+  background-color: var(--bg-surface);
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%2394a3b8' stroke-width='2.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 8px center;
+  background-size: 12px;
+  transition: background-color 0.12s, border-color 0.12s, box-shadow 0.12s, color 0.12s;
+}
+.glass-toolbar select.toolbar-control.glass-input:hover {
+  background-color: var(--bg-surface-2);
+  border-color: var(--border-strong);
+  color: var(--text-primary);
+}
+.glass-toolbar select.toolbar-control.glass-input:focus {
+  box-shadow: inset 0 1px 0 var(--rim-top), 0 2px 6px rgba(0, 0, 0, 0.1), 0 0 0 3px rgba(99, 102, 241, 0.12);
+}
+.glass-toolbar .toolbar-divider {
+  align-self: center;
+  width: 1px;
+  height: 28px;
+  background: var(--border);
 }
 
 /* ─── Section header ─── */

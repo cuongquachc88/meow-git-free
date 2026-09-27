@@ -2,15 +2,28 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { getBoundToken, pullBranch, pushBranch } from "./remoteSync";
 
 const pushWithToken = vi.fn();
+const pushBranchCmd = vi.fn();
 const pullWithToken = vi.fn();
 const pullBranchCmd = vi.fn();
 const getToken = vi.fn();
+const listRemotes = vi.fn();
 
 vi.mock("../ipc/git", () => ({
   git: {
     pushWithToken: (...args: unknown[]) => pushWithToken(...args),
+    pushBranch: (...args: unknown[]) => pushBranchCmd(...args),
     pullWithToken: (...args: unknown[]) => pullWithToken(...args),
     pullBranch: (...args: unknown[]) => pullBranchCmd(...args),
+    listRemotes: (...args: unknown[]) => listRemotes(...args),
+  },
+}));
+
+vi.mock("../store/accountStore", () => ({
+  useAccountStore: {
+    getState: () => ({
+      accounts: [],
+      bindRepoToAccount: vi.fn(),
+    }),
   },
 }));
 
@@ -49,20 +62,40 @@ describe("getBoundToken", () => {
 });
 
 describe("pushBranch", () => {
-  beforeEach(() => vi.clearAllMocks());
+  beforeEach(() => {
+    vi.clearAllMocks();
+    listRemotes.mockResolvedValue([{ name: "origin", url: "https://github.com/a/b.git", pushUrl: null }]);
+  });
 
   it("calls pushWithToken on origin when creds provided", async () => {
     await pushBranch("/repo", "main", { username: "u", token: "t" });
     expect(pushWithToken).toHaveBeenCalledWith("/repo", "origin", "main", "u", "t");
   });
 
-  it("throws when pushing without credentials", async () => {
-    await expect(pushBranch("/repo", "main", null)).rejects.toThrow(/Bind a GitHub account/);
+  it("falls back to system push without token creds", async () => {
+    pushBranchCmd.mockResolvedValue(undefined);
+    await pushBranch("/repo", "main", null);
+    expect(pushBranchCmd).toHaveBeenCalledWith("/repo", "origin", "main");
+  });
+
+  it("uses first remote when origin is missing", async () => {
+    listRemotes.mockResolvedValue([{ name: "github", url: "https://github.com/a/b.git", pushUrl: null }]);
+    pushBranchCmd.mockResolvedValue(undefined);
+    await pushBranch("/repo", "main", null);
+    expect(pushBranchCmd).toHaveBeenCalledWith("/repo", "github", "main");
+  });
+
+  it("surfaces error when system push fails", async () => {
+    pushBranchCmd.mockRejectedValue(new Error("auth failed"));
+    await expect(pushBranch("/repo", "main", null)).rejects.toThrow(/no usable account token/);
   });
 });
 
 describe("pullBranch", () => {
-  beforeEach(() => vi.clearAllMocks());
+  beforeEach(() => {
+    vi.clearAllMocks();
+    listRemotes.mockResolvedValue([{ name: "origin", url: "https://github.com/a/b.git", pushUrl: null }]);
+  });
 
   it("uses token pull when creds provided", async () => {
     pullWithToken.mockResolvedValue(true);

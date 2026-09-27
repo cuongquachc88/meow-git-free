@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { useUIStore } from "../../store/uiStore";
 import { useAccountStore } from "../../store/accountStore";
+import { useRepoStore } from "../../store/repoStore";
 import type { ProviderKind } from "../../types/accounts";
 import { accounts as accountsIpc } from "../../ipc/accounts";
 import { openUrl } from "@tauri-apps/plugin-opener";
@@ -71,7 +72,8 @@ const PROVIDER_BG: Record<ProviderKind, string> = {
 
 export function AccountManager() {
   const { isAccountManagerOpen, toggleAccountManager } = useUIStore();
-  const { accounts, addAccount, removeAccount } = useAccountStore();
+  const { accounts, addAccount, removeAccount, bindRepoToAccount } = useAccountStore();
+  const activeRepoPath = useRepoStore((s) => s.activeRepoPath);
   const [provider, setProvider] = useState<ProviderKind>("github");
   const [username, setUsername] = useState("");
   const [token, setToken] = useState("");
@@ -97,6 +99,7 @@ export function AccountManager() {
         baseUrl.trim() || undefined
       );
       await addAccount(account, token.trim());
+      if (activeRepoPath) bindRepoToAccount(activeRepoPath, account.id);
       setUsername("");
       setToken("");
       setBaseUrl("");

@@ -3,9 +3,10 @@ import { useUIStore, Theme } from "../../store/uiStore";
 import { useAccountStore } from "../../store/accountStore";
 import { accounts as accountsIpc } from "../../ipc/accounts";
 import { git } from "../../ipc/git";
+import { getBoundToken, pushBranch } from "../../lib/remoteSync";
 import { RepoBranchPicker } from "./RepoBranchPicker";
 import { TOOLBAR_BRAND_H } from "../../constants/layout";
-import appIconUrl from "../../assets/app-icon.png";
+import { AppLogo } from "../shared/AppLogo";
 import {
   IconAccount,
   IconBranchLocal,
@@ -35,9 +36,6 @@ export function ToolBar({
   const { getAccountForRepo, accounts, bindRepoToAccount } = useAccountStore();
 
   const headBranch = branches.find((b) => b.isHead);
-
-  // GitHub accounts for the account switcher
-  const githubAccounts = accounts.filter((a) => a.provider === "github");
   const boundAccount = activeRepoPath ? getAccountForRepo(activeRepoPath) : null;
 
   const getToken = async (accountId: string) => {
@@ -66,17 +64,19 @@ export function ToolBar({
   const handlePush = async () => {
     if (!activeRepoPath || !headBranch) return;
     try {
-      if (boundAccount) {
-        const token = await getToken(boundAccount.id);
-        if (token) {
-          await git.pushWithToken(activeRepoPath, "origin", headBranch.name, boundAccount.username, token);
-          await refreshBranches();
-          return;
-        }
-      }
-      alert("No account bound. Add an account and bind it to this repo via the Accounts button.");
+      const creds = await getBoundToken(activeRepoPath, getAccountForRepo);
+      await pushBranch(activeRepoPath, headBranch.name, creds);
+      await refreshBranches();
     } catch (e) {
-      alert(`Push failed: ${e}`);
+      const msg = String(e);
+      if (/credentials|Bind|account/i.test(msg)) {
+        const open = window.confirm(
+          `${msg}\n\nOpen Accounts to add a token or pick an account for this repo?`,
+        );
+        if (open) toggleAccountManager();
+      } else {
+        alert(`Push failed: ${msg}`);
+      }
     }
   };
 
@@ -89,6 +89,9 @@ export function ToolBar({
     const next: Record<Theme, Theme> = { dark: "light", light: "auto", auto: "dark" };
     setTheme(next[theme]);
   };
+
+  const ctrl = "glass-btn toolbar-control";
+  const gitBtn = `${ctrl} flex items-center gap-1 shrink-0`;
 
   return (
     <header className="glass-toolbar relative z-50 overflow-visible min-h-11 flex items-center pl-2.5 pr-3 gap-1.5 py-1 shrink-0">
@@ -108,58 +111,58 @@ export function ToolBar({
           }}
           title={activeRepoPath ? "Meow Git" : "Open repository"}
         >
-          <img src={appIconUrl} alt="" className="w-full h-full object-cover" draggable={false} />
+          <AppLogo size={28} />
         </button>
         <RepoBranchPicker onOpenRepo={onOpenRepo} />
       </div>
 
-      {!changesPanelVisible && onToggleChangesPanel && activeRepoPath && (
-        <button
-          onClick={onToggleChangesPanel}
-          className="glass-btn text-[11px] px-2.5 py-1 shrink-0"
-          title="Show files and diff"
-        >
-          Files &amp; diff
-        </button>
-      )}
-
-      {/* Account switcher */}
-      {activeRepoPath && githubAccounts.length > 0 && (
-        <select
-          className="glass-input py-0.5 text-[10px] rounded-lg"
-          style={{ width: 100, height: 22, paddingTop: 1, paddingBottom: 1 }}
-          value={boundAccount?.id ?? ""}
-          onChange={(e) => { if (activeRepoPath && e.target.value) bindRepoToAccount(activeRepoPath, e.target.value); }}
-          title="Account for push/pull/fetch"
-        >
-          <option value="">— account —</option>
-          {githubAccounts.map((a) => <option key={a.id} value={a.id}>{a.username}</option>)}
-        </select>
-      )}
-
       {activeRepoPath && (
-        <>
-          <div className="w-px h-4 mx-0.5" style={{ background: "var(--border)" }} />
-          <button onClick={handleFetch} className="glass-btn flex items-center gap-1 px-3 py-1 text-[12px]" title="Fetch">
+        <div className="flex items-center gap-1.5 ml-2 shrink-0 min-w-0">
+          {!changesPanelVisible && onToggleChangesPanel && (
+            <button onClick={onToggleChangesPanel} className={ctrl} title="Show files and diff">
+              Files
+            </button>
+          )}
+
+          {accounts.length > 0 && (
+            <select
+              className="glass-input toolbar-control shrink-0"
+              value={boundAccount?.id ?? ""}
+              onChange={(e) => {
+                if (e.target.value) bindRepoToAccount(activeRepoPath, e.target.value);
+              }}
+              title="Account for HTTPS push/pull (optional if using SSH)"
+            >
+              <option value="">SSH / system</option>
+              {accounts.map((a) => (
+                <option key={a.id} value={a.id}>
+                  {a.username} ({a.provider})
+                </option>
+              ))}
+            </select>
+          )}
+
+          <div className="toolbar-divider mx-0.5 shrink-0" />
+          <button onClick={handleFetch} className={gitBtn} title="Fetch">
             <IconFetch size={14} /><span>Fetch</span>
           </button>
-          <button onClick={handleFetch} className="glass-btn flex items-center gap-1 px-3 py-1 text-[12px]" title="Pull">
+          <button onClick={handleFetch} className={gitBtn} title="Pull">
             <IconPull size={14} /><span>Pull</span>
           </button>
-          <button onClick={handlePush} className="glass-btn flex items-center gap-1 px-3 py-1 text-[12px]" title="Push">
+          <button onClick={handlePush} className={gitBtn} title="Push">
             <IconPush size={14} /><span>Push</span>
           </button>
-          <div className="w-px h-4 mx-0.5" style={{ background: "var(--border)" }} />
-          <button onClick={() => openBranchDialog()} className="glass-btn flex items-center gap-1 px-3 py-1 text-[12px]" title="Create branch">
+          <div className="toolbar-divider mx-0.5 shrink-0" />
+          <button onClick={() => openBranchDialog()} className={gitBtn} title="Create branch">
             <IconBranchLocal size={14} /><span>Branch</span>
           </button>
-          <button onClick={() => openMergeDialog()} className="glass-btn flex items-center gap-1 px-3 py-1 text-[12px]" title="Merge branches">
+          <button onClick={() => openMergeDialog()} className={gitBtn} title="Merge branches">
             <IconMerge size={14} /><span>Merge</span>
           </button>
-          <button onClick={() => openCommitDialog()} className="glass-btn glass-btn-accent flex items-center gap-1 px-3 py-1 text-[12px]" title="Commit (optional amend in dialog)">
+          <button onClick={() => openCommitDialog()} className={`${gitBtn} glass-btn-accent`} title="Commit (optional amend in dialog)">
             <IconCommit size={14} /><span>Commit</span>
           </button>
-        </>
+        </div>
       )}
 
       <div className="flex-1" />
