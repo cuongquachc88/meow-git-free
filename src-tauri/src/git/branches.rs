@@ -1,6 +1,60 @@
 use anyhow::{anyhow, Result};
-use git2::{BranchType, Repository};
+use git2::{BranchType, Oid, Repository};
 use serde::{Deserialize, Serialize};
+
+fn branch_kind(kind: BranchType) -> &'static str {
+    match kind {
+        BranchType::Local => "Local",
+        BranchType::Remote => "Remote",
+    }
+}
+
+/// Compare local branch to upstream tracking, else to origin/branch or origin/main.
+fn ahead_behind_vs_sync_ref(
+    repo: &Repository,
+    local_oid: Oid,
+    branch_name: &str,
+    upstream_branch: Option<&git2::Branch>,
+) -> (Option<usize>, Option<usize>, Option<String>) {
+    if let Some(upstream_b) = upstream_branch {
+        if let Ok(upstream_id) = upstream_b.get().peel_to_commit().map(|c| c.id()) {
+            if let Ok((a, b)) = repo.graph_ahead_behind(local_oid, upstream_id) {
+                let name = upstream_b
+                    .name()
+                    .ok()
+                    .flatten()
+                    .map(|s| s.to_string());
+                return (Some(a), Some(b), name);
+            }
+        }
+    }
+
+    let mut candidates: Vec<(String, String)> = vec![(
+        format!("refs/remotes/origin/{branch_name}"),
+        format!("origin/{branch_name}"),
+    )];
+    if branch_name != "main" && branch_name != "master" {
+        candidates.push(("refs/remotes/origin/main".into(), "origin/main".into()));
+        candidates.push(("refs/remotes/origin/master".into(), "origin/master".into()));
+    }
+    candidates.push(("refs/heads/main".into(), "main".into()));
+    candidates.push(("refs/heads/master".into(), "master".into()));
+
+    for (cref, label) in candidates {
+        if let Ok(reference) = repo.find_reference(&cref) {
+            if let Ok(upstream_id) = reference.peel_to_commit().map(|c| c.id()) {
+                if upstream_id == local_oid {
+                    continue;
+                }
+                if let Ok((a, b)) = repo.graph_ahead_behind(local_oid, upstream_id) {
+                    return (Some(a), Some(b), Some(label));
+                }
+            }
+        }
+    }
+
+    (None, None, None)
+}
 
 #[derive(Debug, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -23,35 +77,37 @@ pub fn list_branches(path: &str) -> Result<Vec<BranchInfo>> {
         let name = branch.name()?.unwrap_or("").to_string();
         let is_head = branch.is_head();
         let upstream_branch = branch.upstream().ok();
-        let upstream = upstream_branch
-            .as_ref()
-            .and_then(|u| u.name().ok().flatten().map(|s| s.to_string()));
         let tip_id = branch
             .get()
             .peel_to_commit()
             .ok()
             .map(|c| c.id().to_string());
 
-        // Compute ahead/behind vs upstream
-        let (ahead, behind) = if let (Some(local_id), Some(upstream_b)) = (
-            branch.get().peel_to_commit().ok().map(|c| c.id()),
-            upstream_branch.as_ref(),
-        ) {
-            if let Ok(upstream_id) = upstream_b.get().peel_to_commit().map(|c| c.id()) {
-                repo.graph_ahead_behind(local_id, upstream_id)
-                    .map(|(a, b)| (Some(a), Some(b)))
-                    .unwrap_or((None, None))
+        let (ahead, behind, upstream) = if kind == BranchType::Local {
+            if let Ok(local_id) = branch.get().peel_to_commit().map(|c| c.id()) {
+                ahead_behind_vs_sync_ref(
+                    &repo,
+                    local_id,
+                    &name,
+                    upstream_branch.as_ref(),
+                )
             } else {
-                (None, None)
+                (None, None, None)
             }
         } else {
-            (None, None)
+            (
+                None,
+                None,
+                upstream_branch
+                    .as_ref()
+                    .and_then(|u| u.name().ok().flatten().map(|s| s.to_string())),
+            )
         };
 
         branches.push(BranchInfo {
             name,
             is_head,
-            kind: format!("{:?}", kind),
+            kind: branch_kind(kind).to_string(),
             upstream,
             tip_id,
             ahead,

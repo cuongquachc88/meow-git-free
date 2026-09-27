@@ -321,6 +321,46 @@ select.glass-input {
   background: var(--border);
 }
 
+.glass-toolbar .toolbar-sync-spin {
+  animation: toolbar-sync-spin 0.75s linear infinite;
+  flex-shrink: 0;
+}
+
+@keyframes toolbar-sync-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.glass-toolbar .glass-btn.toolbar-control.toolbar-sync-active {
+  border-color: var(--accent-border);
+  color: var(--accent);
+  box-shadow: inset 0 1px 0 var(--rim-top), 0 0 0 1px var(--accent-border);
+}
+
+.glass-toolbar .toolbar-sync-status {
+  font-size: 10px;
+  line-height: 1.2;
+  max-width: 9rem;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  padding: 0 2px;
+  transition: opacity 0.2s ease;
+}
+
+.glass-toolbar .toolbar-sync-status--busy {
+  color: var(--accent);
+}
+
+.glass-toolbar .toolbar-sync-status--ok {
+  color: rgba(34, 197, 94, 0.85);
+}
+
+.glass-toolbar .toolbar-sync-status--err {
+  color: rgba(239, 68, 68, 0.85);
+}
+
 /* ─── Section header ─── */
 .section-header {
   font-size: 10px;

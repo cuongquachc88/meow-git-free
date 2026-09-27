@@ -5,6 +5,7 @@ import type { CommitInfo } from "../../types/git";
 import { git } from "../../ipc/git";
 import { formatDistanceToNow } from "date-fns";
 import { dedupeBranchLabels, formatBranchLabel, type BranchLabel } from "../../lib/branchLabels";
+import { currentLocalBranch, describeBranchTracking } from "../../lib/branchTracking";
 import {
   buildGraph,
   graphWidth,
@@ -246,6 +247,11 @@ export function CommitGraph({ onOpenChangesPanel }: { onOpenChangesPanel?: () =>
 
   const localBranches = useMemo(() => branches.filter((b) => b.kind === "Local"), [branches]);
 
+  const branchTracking = useMemo(
+    () => describeBranchTracking(currentLocalBranch(branches)),
+    [branches],
+  );
+
   const commitBranchLabels = useMemo(() => {
     const raw = new Map<string, BranchLabel[]>();
     branches.forEach((b) => {
@@ -404,6 +410,27 @@ export function CommitGraph({ onOpenChangesPanel }: { onOpenChangesPanel?: () =>
             >×</button>
           )}
         </div>
+
+        {branchTracking && (
+          <div
+            className="commit-graph-tracking shrink-0 flex items-center gap-1.5 px-2.5 rounded-full border font-mono text-[10px]"
+            style={{
+              height: GRAPH_FILTER_H,
+              borderColor: branchTracking.inSync ? "rgba(34,197,94,0.35)" : "var(--accent-border)",
+              color: branchTracking.inSync ? "rgba(34,197,94,0.9)" : "var(--accent)",
+              background: branchTracking.inSync ? "rgba(34,197,94,0.08)" : "var(--accent-bg)",
+            }}
+            title={`Current branch vs ${branchTracking.refLabel}. ↑ = commits not on remote yet, ↓ = commits on remote you don't have.`}
+          >
+            {!branchTracking.inSync && branchTracking.ahead > 0 && (
+              <span>↑{branchTracking.ahead}</span>
+            )}
+            {!branchTracking.inSync && branchTracking.behind > 0 && (
+              <span>↓{branchTracking.behind}</span>
+            )}
+            <span className="max-w-[11rem] truncate font-sans">{branchTracking.summary}</span>
+          </div>
+        )}
 
         <select
           className={graphFilterClass}

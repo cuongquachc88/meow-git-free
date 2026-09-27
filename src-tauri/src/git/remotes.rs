@@ -1,5 +1,5 @@
 use anyhow::Result;
-use git2::Repository;
+use git2::{BranchType, Repository};
 use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -173,6 +173,16 @@ pub fn push_with_token(path: &str, remote_name: &str, branch: &str, username: &s
     push_opts.remote_callbacks(callbacks);
     let refspec = format!("refs/heads/{}:refs/heads/{}", branch, branch);
     remote.push(&[&refspec], Some(&mut push_opts))?;
+    set_upstream_after_push(&repo, branch)?;
+    Ok(())
+}
+
+fn set_upstream_after_push(repo: &Repository, branch_name: &str) -> Result<()> {
+    let upstream = format!("origin/{branch_name}");
+    let mut local = repo.find_branch(branch_name, BranchType::Local)?;
+    if local.upstream().is_err() {
+        let _ = local.set_upstream(Some(upstream.as_str()));
+    }
     Ok(())
 }
 

@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
 import { useRepoStore } from "../../store/repoStore";
 import { useUIStore, Theme } from "../../store/uiStore";
 import { useAccountStore } from "../../store/accountStore";
@@ -30,6 +30,7 @@ import {
   IconPull,
   IconPush,
   IconRefresh,
+  IconSpinner,
   IconSun,
   IconThemeAuto,
 } from "../shared/icons/GitIcons";
@@ -51,6 +52,28 @@ export function ToolBar({
   const headBranch = branches.find((b) => b.isHead);
   const boundAccount = activeRepoPath ? getAccountForRepo(activeRepoPath) : null;
   const [toolbarAccountId, setToolbarAccountId] = useState("");
+  type SyncOp = "fetch" | "pull" | "push";
+  type SyncStatus = { kind: "busy" | "ok" | "err"; text: string } | null;
+  const [syncOp, setSyncOp] = useState<SyncOp | null>(null);
+  const [syncStatus, setSyncStatus] = useState<SyncStatus>(null);
+  const syncStatusTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const flashSyncStatus = (status: SyncStatus) => {
+    if (syncStatusTimer.current) clearTimeout(syncStatusTimer.current);
+    setSyncStatus(status);
+    if (status && status.kind !== "busy") {
+      syncStatusTimer.current = setTimeout(() => setSyncStatus(null), 2800);
+    }
+  };
+
+  useEffect(
+    () => () => {
+      if (syncStatusTimer.current) clearTimeout(syncStatusTimer.current);
+    },
+    [],
+  );
+
+  const syncBusy = syncOp !== null;
 
   useEffect(() => {
     if (!activeRepoPath) {
@@ -91,20 +114,27 @@ export function ToolBar({
   };
 
   const handleFetch = async () => {
-    if (!activeRepoPath) return;
+    if (!activeRepoPath || syncBusy) return;
     if (!(await ensureRemoteBeforeSync(activeRepoPath))) return;
+    setSyncOp("fetch");
+    flashSyncStatus({ kind: "busy", text: "Fetching…" });
     try {
       await runFetch();
+      flashSyncStatus({ kind: "ok", text: "Fetch done" });
     } catch (e) {
       if (isNoRemoteError(e) && (await ensureRemoteBeforeSync(activeRepoPath))) {
         try {
           await runFetch();
+          flashSyncStatus({ kind: "ok", text: "Fetch done" });
           return;
         } catch (retry) {
           e = retry;
         }
       }
+      flashSyncStatus({ kind: "err", text: "Fetch failed" });
       alert(`Fetch failed: ${e}`);
+    } finally {
+      setSyncOp(null);
     }
   };
 
@@ -133,7 +163,9 @@ export function ToolBar({
   };
 
   const handlePull = async () => {
-    if (!activeRepoPath || !headBranch) return;
+    if (!activeRepoPath || !headBranch || syncBusy) return;
+    setSyncOp("pull");
+    flashSyncStatus({ kind: "busy", text: "Pulling…" });
     try {
       const clean = await pullRepoBranch(
         activeRepoPath,
@@ -142,7 +174,12 @@ export function ToolBar({
         toolbarAccountId || null,
       );
       await Promise.all([refreshLog(), refreshBranches(), refreshStatus()]);
-      if (!clean) alert("Pull has conflicts — resolve in Files.");
+      if (!clean) {
+        flashSyncStatus({ kind: "err", text: "Pull — conflicts" });
+        alert("Pull has conflicts — resolve in Files.");
+      } else {
+        flashSyncStatus({ kind: "ok", text: "Pull done" });
+      }
     } catch (e) {
       if (e instanceof SyncCancelledError) return;
       if (await handleAuthSyncFailure("Pull", e)) return;
@@ -154,17 +191,26 @@ export function ToolBar({
           toolbarAccountId || null,
         );
         await Promise.all([refreshLog(), refreshBranches(), refreshStatus()]);
-        if (!clean) alert("Pull has conflicts — resolve in Files.");
+        if (!clean) {
+          flashSyncStatus({ kind: "err", text: "Pull — conflicts" });
+          alert("Pull has conflicts — resolve in Files.");
+        } else {
+          flashSyncStatus({ kind: "ok", text: "Pull done" });
+        }
+        return;
       } catch (retry) {
         if (retry instanceof SyncCancelledError) return;
+        flashSyncStatus({ kind: "err", text: "Pull failed" });
         const msg = describeSyncError(retry);
         if (msg) alert(`Pull failed: ${msg}`);
       }
+    } finally {
+      setSyncOp(null);
     }
   };
 
   const handlePush = async () => {
-    if (!activeRepoPath || !headBranch) return;
+    if (!activeRepoPath || !headBranch || syncBusy) return;
 
     const runPush = async () => {
       await pushRepoBranch(
@@ -176,20 +222,27 @@ export function ToolBar({
       await refreshBranches();
     };
 
+    setSyncOp("push");
+    flashSyncStatus({ kind: "busy", text: "Pushing…" });
     try {
       await runPush();
+      flashSyncStatus({ kind: "ok", text: "Push done" });
     } catch (e) {
       if (e instanceof SyncCancelledError) return;
       if (await handleAuthSyncFailure("Push", e)) return;
       try {
         await runPush();
+        flashSyncStatus({ kind: "ok", text: "Push done" });
         return;
       } catch (retryAfterPat) {
         e = retryAfterPat;
       }
 
+      flashSyncStatus({ kind: "err", text: "Push failed" });
       const msg = describeSyncError(e);
       if (msg) alert(`Push failed: ${msg}`);
+    } finally {
+      setSyncOp(null);
     }
   };
 
@@ -205,6 +258,37 @@ export function ToolBar({
 
   const ctrl = "glass-btn toolbar-control";
   const gitBtn = `${ctrl} flex items-center gap-1 shrink-0`;
+
+  const SyncGitButton = ({
+    op,
+    label,
+    busyLabel,
+    title,
+    icon,
+    onClick,
+  }: {
+    op: SyncOp;
+    label: string;
+    busyLabel: string;
+    title: string;
+    icon: ReactNode;
+    onClick: () => void;
+  }) => {
+    const active = syncOp === op;
+    return (
+      <button
+        type="button"
+        onClick={onClick}
+        disabled={syncBusy}
+        className={`${gitBtn}${active ? " toolbar-sync-active" : ""}`}
+        title={active ? busyLabel : title}
+        aria-busy={active}
+      >
+        {active ? <IconSpinner size={14} className="toolbar-sync-spin" /> : icon}
+        <span>{active ? busyLabel : label}</span>
+      </button>
+    );
+  };
 
   return (
     <header className="glass-toolbar relative z-50 overflow-visible min-h-11 flex items-center pl-2.5 pr-3 gap-1.5 py-1 shrink-0">
@@ -268,15 +352,39 @@ export function ToolBar({
               <span>Files</span>
             </button>
           )}
-          <button onClick={handleFetch} className={gitBtn} title="Fetch">
-            <IconFetch size={14} /><span>Fetch</span>
-          </button>
-          <button onClick={handlePull} className={gitBtn} title="Pull current branch">
-            <IconPull size={14} /><span>Pull</span>
-          </button>
-          <button onClick={handlePush} className={gitBtn} title="Push">
-            <IconPush size={14} /><span>Push</span>
-          </button>
+          {syncStatus && (
+            <span
+              className={`toolbar-sync-status toolbar-sync-status--${syncStatus.kind} shrink-0`}
+              role="status"
+              aria-live="polite"
+            >
+              {syncStatus.text}
+            </span>
+          )}
+          <SyncGitButton
+            op="fetch"
+            label="Fetch"
+            busyLabel="Fetching…"
+            title="Fetch"
+            icon={<IconFetch size={14} />}
+            onClick={() => void handleFetch()}
+          />
+          <SyncGitButton
+            op="pull"
+            label="Pull"
+            busyLabel="Pulling…"
+            title="Pull current branch"
+            icon={<IconPull size={14} />}
+            onClick={() => void handlePull()}
+          />
+          <SyncGitButton
+            op="push"
+            label="Push"
+            busyLabel="Pushing…"
+            title="Push"
+            icon={<IconPush size={14} />}
+            onClick={() => void handlePush()}
+          />
           <div className="toolbar-divider mx-0.5 shrink-0" />
           <button onClick={() => openBranchDialog()} className={gitBtn} title="Create branch">
             <IconBranchLocal size={14} /><span>Branch</span>
