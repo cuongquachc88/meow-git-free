@@ -49,6 +49,7 @@ pub fn run() {
             // remotes
             list_remotes,
             add_remote,
+            upsert_remote,
             remove_remote,
             fetch_remote,
             fetch_with_token,
@@ -77,6 +78,7 @@ pub fn run() {
             get_account_token,
             delete_account_token,
             create_account,
+            create_host_repository,
             // ssh
             generate_ssh_key,
             read_public_key,

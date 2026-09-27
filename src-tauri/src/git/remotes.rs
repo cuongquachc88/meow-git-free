@@ -32,6 +32,18 @@ pub fn add_remote(path: &str, name: &str, url: &str) -> Result<()> {
     Ok(())
 }
 
+/// Create remote or replace its fetch/push URL (e.g. after creating repo on GitHub).
+pub fn upsert_remote(path: &str, name: &str, url: &str) -> Result<()> {
+    let repo = Repository::open(path)?;
+    if repo.find_remote(name).is_ok() {
+        repo.remote_set_url(name, url)?;
+        repo.remote_set_pushurl(name, Some(url))?;
+    } else {
+        repo.remote(name, url)?;
+    }
+    Ok(())
+}
+
 pub fn remove_remote(path: &str, name: &str) -> Result<()> {
     let repo = Repository::open(path)?;
     repo.remote_delete(name)?;
@@ -53,6 +65,51 @@ pub fn fetch_remote(path: &str, remote_name: &str) -> Result<()> {
     fetch_opts.remote_callbacks(callbacks);
     remote.fetch::<&str>(&[], Some(&mut fetch_opts), None)?;
     Ok(())
+}
+
+/// HTTPS PAT auth for GitHub/GitLab — avoids libgit2 "authentication replays" when creds are wrong.
+fn pat_https_username(remote_url: &str, username_from_url: Option<&str>, fallback: &str) -> String {
+    let url = remote_url.to_ascii_lowercase();
+    if url.contains("github.com") {
+        return "x-access-token".to_string();
+    }
+    if url.contains("gitlab.com") || url.contains("gitlab.") {
+        return "oauth2".to_string();
+    }
+    username_from_url
+        .filter(|u| !u.is_empty())
+        .unwrap_or(fallback)
+        .to_string()
+}
+
+fn pat_credentials(
+    remote_url: String,
+    username: String,
+    token: String,
+) -> impl FnMut(&str, Option<&str>, git2::CredentialType) -> Result<git2::Cred, git2::Error> {
+    use std::cell::Cell;
+    let attempts = Cell::new(0u32);
+    move |url, username_from_url, allowed| {
+        let n = attempts.get();
+        attempts.set(n + 1);
+        if n > 0 {
+            return Err(git2::Error::from_str(
+                "HTTP authentication failed — check PAT (repo scope, not revoked/expired)",
+            ));
+        }
+        if allowed.is_user_pass_plaintext() || allowed.is_default() {
+            let user = pat_https_username(
+                if url.is_empty() { &remote_url } else { url },
+                username_from_url,
+                &username,
+            );
+            git2::Cred::userpass_plaintext(&user, &token)
+        } else if allowed.is_username() {
+            git2::Cred::username(username_from_url.unwrap_or(&username))
+        } else {
+            Err(git2::Error::from_str("no supported HTTPS credential type"))
+        }
+    }
 }
 
 fn default_credentials(
@@ -86,12 +143,14 @@ fn default_credentials(
 pub fn fetch_with_token(path: &str, remote_name: &str, username: &str, token: &str) -> Result<()> {
     let repo = Repository::open(path)?;
     let mut remote = repo.find_remote(remote_name)?;
+    let remote_url = remote.url().unwrap_or("").to_string();
+    let user = username.trim().to_string();
+    let tok = token.trim().to_string();
+    if tok.is_empty() {
+        anyhow::bail!("token is empty");
+    }
     let mut callbacks = git2::RemoteCallbacks::new();
-    let user = username.to_string();
-    let tok = token.to_string();
-    callbacks.credentials(move |_url, _username, _allowed| {
-        git2::Cred::userpass_plaintext(&user, &tok)
-    });
+    callbacks.credentials(pat_credentials(remote_url, user, tok));
     let mut fetch_opts = git2::FetchOptions::new();
     fetch_opts.remote_callbacks(callbacks);
     remote.fetch::<&str>(&[], Some(&mut fetch_opts), None)?;
@@ -102,12 +161,14 @@ pub fn fetch_with_token(path: &str, remote_name: &str, username: &str, token: &s
 pub fn push_with_token(path: &str, remote_name: &str, branch: &str, username: &str, token: &str) -> Result<()> {
     let repo = Repository::open(path)?;
     let mut remote = repo.find_remote(remote_name)?;
+    let remote_url = remote.url().unwrap_or("").to_string();
+    let user = username.trim().to_string();
+    let tok = token.trim().to_string();
+    if tok.is_empty() {
+        anyhow::bail!("token is empty");
+    }
     let mut callbacks = git2::RemoteCallbacks::new();
-    let user = username.to_string();
-    let tok = token.to_string();
-    callbacks.credentials(move |_url, _username, _allowed| {
-        git2::Cred::userpass_plaintext(&user, &tok)
-    });
+    callbacks.credentials(pat_credentials(remote_url, user, tok));
     let mut push_opts = git2::PushOptions::new();
     push_opts.remote_callbacks(callbacks);
     let refspec = format!("refs/heads/{}:refs/heads/{}", branch, branch);

@@ -23,9 +23,11 @@
   --glass-sidebar:  rgba(10,12,24,0.75);
   --glass-toolbar:  rgba(13,15,28,0.82);
   --glass-panel:    rgba(18,20,38,0.88);
-  --glass-context:  rgba(10,12,22,0.42);
+  --glass-context:  rgba(14,16,30,0.82);
+  --glass-menu:     rgba(14,16,30,0.92);
   --glass-blur:     blur(24px) saturate(180%);
-  --glass-context-blur: blur(28px) saturate(180%);
+  --glass-context-blur: blur(20px) saturate(160%);
+  --glass-menu-blur: blur(16px) saturate(150%);
 
   --rim-top:        rgba(255,255,255,0.18);
   --rim-bot:        rgba(0,0,0,0.12);
@@ -70,9 +72,11 @@
   --glass-sidebar:  rgba(232,234,248,0.88);
   --glass-toolbar:  rgba(240,242,252,0.92);
   --glass-panel:    rgba(255,255,255,0.92);
-  --glass-context:  rgba(255,255,255,0.58);
+  --glass-context:  rgba(255,255,255,0.88);
+  --glass-menu:     rgba(255,255,255,0.96);
   --glass-blur:     blur(24px) saturate(160%);
-  --glass-context-blur: blur(28px) saturate(160%);
+  --glass-context-blur: blur(20px) saturate(150%);
+  --glass-menu-blur: blur(12px) saturate(140%);
 
   --rim-top:        rgba(255,255,255,0.95);
   --rim-bot:        rgba(0,0,0,0.04);
@@ -168,7 +172,7 @@ body {
   pointer-events: none;
 }
 
-/* Context menus — lighter glass so graph / list shows through */
+/* Right-click / commit menus — readable glass */
 .glass-context-menu {
   background: var(--glass-context);
   backdrop-filter: var(--glass-context-blur);
@@ -177,6 +181,29 @@ body {
   box-shadow:
     inset 0 1px 0 var(--rim-top),
     0 12px 36px rgba(0, 0, 0, 0.28);
+}
+
+/* Toolbar repo / branch dropdowns — more solid for legibility */
+.glass-dropdown-menu {
+  background: var(--glass-menu);
+  backdrop-filter: var(--glass-menu-blur);
+  -webkit-backdrop-filter: var(--glass-menu-blur);
+  border: 1px solid var(--border-strong);
+  box-shadow:
+    inset 0 1px 0 var(--rim-top),
+    0 12px 36px rgba(0, 0, 0, 0.32);
+}
+
+.light .glass-context-menu {
+  box-shadow:
+    inset 0 1px 0 var(--rim-top),
+    0 12px 32px rgba(0, 0, 0, 0.1);
+}
+
+.light .glass-dropdown-menu {
+  box-shadow:
+    inset 0 1px 0 var(--rim-top),
+    0 12px 28px rgba(0, 0, 0, 0.12);
 }
 
 /* ─── Glass Button ─── */

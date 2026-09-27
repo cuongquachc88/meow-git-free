@@ -598,8 +598,8 @@ export function CommitGraph({ onOpenChangesPanel }: { onOpenChangesPanel?: () =>
           />
         ) : (
           <div
-            className="fixed glass-panel rounded-xl px-4 py-3 text-[12px]"
-            style={{ zIndex: 9999, left: ctxMenu.x, top: ctxMenu.y, background: "var(--bg-surface-2)" }}
+            className="fixed glass-context-menu rounded-xl px-4 py-3 text-[12px]"
+            style={{ zIndex: 9999, left: ctxMenu.x, top: ctxMenu.y }}
           >
             No repository open
           </div>

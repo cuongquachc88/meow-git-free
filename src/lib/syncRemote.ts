@@ -1,0 +1,122 @@
+import { defaultRepoNameFromPath } from "./remoteUrl";
+import { ensureRemoteBeforeSync, repoHasRemote, requestRemoteSetup } from "./ensureRemote";
+import {
+  HttpsTokenRequiredError,
+  getBoundToken,
+  isNoRemoteError,
+  isRemoteNotFoundError,
+  pullBranch,
+  pushBranch,
+} from "./remoteSync";
+
+export type SyncAccountLookup = (
+  path: string,
+) => { id: string; username: string } | null | undefined;
+
+async function credsForRepo(
+  activeRepoPath: string,
+  getAccountForRepo: SyncAccountLookup,
+  toolbarAccountId?: string | null,
+) {
+  return getBoundToken(activeRepoPath, getAccountForRepo, toolbarAccountId);
+}
+
+export class SyncCancelledError extends Error {
+  constructor() {
+    super("SYNC_CANCELLED");
+    this.name = "SyncCancelledError";
+  }
+}
+
+async function withRemoteSetup<T>(repoPath: string, run: () => Promise<T>): Promise<T> {
+  if (!(await ensureRemoteBeforeSync(repoPath))) {
+    throw new SyncCancelledError();
+  }
+  try {
+    return await run();
+  } catch (e) {
+    if (isNoRemoteError(e) && (await ensureRemoteBeforeSync(repoPath)) && (await repoHasRemote(repoPath))) {
+      return run();
+    }
+    throw e;
+  }
+}
+
+export async function pushRepoBranch(
+  activeRepoPath: string,
+  branchName: string,
+  getAccountForRepo: SyncAccountLookup,
+  toolbarAccountId?: string | null,
+): Promise<void> {
+  const doPush = async () => {
+    const creds = await credsForRepo(activeRepoPath, getAccountForRepo, toolbarAccountId);
+    await pushBranch(activeRepoPath, branchName, creds);
+  };
+
+  if (!(await ensureRemoteBeforeSync(activeRepoPath))) {
+    throw new SyncCancelledError();
+  }
+
+  try {
+    await doPush();
+  } catch (e) {
+    if (isNoRemoteError(e) && (await ensureRemoteBeforeSync(activeRepoPath)) && (await repoHasRemote(activeRepoPath))) {
+      await doPush();
+      return;
+    }
+    if (isRemoteNotFoundError(e)) {
+      const ok = await requestRemoteSetup(defaultRepoNameFromPath(activeRepoPath), "repo_not_found");
+      if (!ok) throw e;
+      await doPush();
+      return;
+    }
+    throw e;
+  }
+}
+
+export async function pullRepoBranch(
+  activeRepoPath: string,
+  branchName: string,
+  getAccountForRepo: SyncAccountLookup,
+  toolbarAccountId?: string | null,
+): Promise<boolean> {
+  return withRemoteSetup(activeRepoPath, async () => {
+    const creds = await credsForRepo(activeRepoPath, getAccountForRepo, toolbarAccountId);
+    return pullBranch(activeRepoPath, branchName, creds);
+  });
+}
+
+const HTTPS_TOKEN_MSG =
+  "Origin uses HTTPS and this account has no PAT in the keychain. Choosing the account in the toolbar is not enough — save a personal access token (repo scope) when prompted, or use Accounts → Add token.";
+
+export function describeSyncError(e: unknown): string | null {
+  if (e instanceof SyncCancelledError) return null;
+  if (e instanceof HttpsTokenRequiredError) return HTTPS_TOKEN_MSG;
+  const msg = e instanceof Error ? e.message : String(e);
+  if (isNoRemoteError(e)) {
+    return "No remote is configured. Use Push again to create a repository and add origin.";
+  }
+  if (/HTTPS_REMOTE_NEEDS_TOKEN|no usable account token|authentication required|no callback set/i.test(msg)) {
+    return HTTPS_TOKEN_MSG;
+  }
+  if (/too many redirects|authentication replays|HTTP authentication failed/i.test(msg)) {
+    return "GitHub rejected HTTPS auth. Use a new PAT with repo scope (revoke old tokens if one was leaked), confirm origin is https://github.com/you/repo.git with no user:pass in the URL, then push again.";
+  }
+  if (isRemoteNotFoundError(e)) {
+    return "GitHub returned 404 — repository not created yet at origin. Meow Git can create it on GitHub (Create & add origin in the dialog).";
+  }
+  if (/credentials|Bind|account/i.test(msg)) {
+    return msg.replace(/^Push failed:\s*/i, "");
+  }
+  return msg.replace(/^Push failed:\s*Push failed:\s*/i, "Push failed: ");
+}
+
+export { isRemoteNotFoundError } from "./remoteSync";
+
+export function isAuthSyncError(e: unknown): boolean {
+  if (e instanceof HttpsTokenRequiredError) return true;
+  const msg = e instanceof Error ? e.message : String(e);
+  return /HTTPS_REMOTE_NEEDS_TOKEN|credentials|Bind|account|no usable account token|authentication required|Auth \(-16\)/i.test(
+    msg,
+  );
+}

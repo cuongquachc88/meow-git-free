@@ -38,6 +38,34 @@ pub struct GitlabProject {
     pub default_branch: Option<String>,
 }
 
+pub async fn create_project(
+    token: &str,
+    name: &str,
+    private: bool,
+    base_url: Option<&str>,
+) -> Result<GitlabProject> {
+    let api_base = base_url
+        .map(|u| format!("{}/api/v4", u.trim_end_matches('/')))
+        .unwrap_or_else(|| GITLAB_API.to_string());
+    let client = reqwest::Client::new();
+    let resp = client
+        .post(format!("{}/projects", api_base))
+        .header("PRIVATE-TOKEN", token)
+        .json(&serde_json::json!({
+            "name": name,
+            "path": name,
+            "visibility": if private { "private" } else { "public" },
+        }))
+        .send()
+        .await?;
+    if !resp.status().is_success() {
+        let status = resp.status();
+        let body = resp.text().await.unwrap_or_default();
+        anyhow::bail!("GitLab API {}: {}", status, body);
+    }
+    Ok(resp.json::<GitlabProject>().await?)
+}
+
 pub async fn list_projects(token: &str, base_url: Option<&str>) -> Result<Vec<GitlabProject>> {
     let api_base = base_url.map(|u| format!("{}/api/v4", u.trim_end_matches('/')))
         .unwrap_or_else(|| GITLAB_API.to_string());

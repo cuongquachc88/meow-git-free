@@ -72,22 +72,23 @@ describe("pushBranch", () => {
     expect(pushWithToken).toHaveBeenCalledWith("/repo", "origin", "main", "u", "t");
   });
 
-  it("falls back to system push without token creds", async () => {
+  it("requires token for HTTPS origin without creds", async () => {
+    await expect(pushBranch("/repo", "main", null)).rejects.toThrow(/HTTPS_REMOTE_NEEDS_TOKEN/);
+    expect(pushBranchCmd).not.toHaveBeenCalled();
+  });
+
+  it("falls back to system push for SSH origin without token", async () => {
+    listRemotes.mockResolvedValue([
+      { name: "origin", url: "git@github.com:a/b.git", pushUrl: null },
+    ]);
     pushBranchCmd.mockResolvedValue(undefined);
     await pushBranch("/repo", "main", null);
     expect(pushBranchCmd).toHaveBeenCalledWith("/repo", "origin", "main");
   });
 
-  it("uses first remote when origin is missing", async () => {
-    listRemotes.mockResolvedValue([{ name: "github", url: "https://github.com/a/b.git", pushUrl: null }]);
-    pushBranchCmd.mockResolvedValue(undefined);
-    await pushBranch("/repo", "main", null);
-    expect(pushBranchCmd).toHaveBeenCalledWith("/repo", "github", "main");
-  });
-
-  it("surfaces error when system push fails", async () => {
-    pushBranchCmd.mockRejectedValue(new Error("auth failed"));
-    await expect(pushBranch("/repo", "main", null)).rejects.toThrow(/no usable account token/);
+  it("surfaces error when token push fails", async () => {
+    pushWithToken.mockRejectedValue(new Error("auth failed"));
+    await expect(pushBranch("/repo", "main", { username: "u", token: "t" })).rejects.toThrow(/auth failed/);
   });
 });
 
@@ -104,10 +105,7 @@ describe("pullBranch", () => {
     expect(pullWithToken).toHaveBeenCalledWith("/repo", "origin", "feature", "u", "t");
   });
 
-  it("falls back to local pull without creds", async () => {
-    pullBranchCmd.mockResolvedValue(false);
-    const clean = await pullBranch("/repo", "feature", null);
-    expect(clean).toBe(false);
-    expect(pullBranchCmd).toHaveBeenCalledWith("/repo", "origin", "feature");
+  it("requires token for HTTPS pull without creds", async () => {
+    await expect(pullBranch("/repo", "feature", null)).rejects.toThrow(/HTTPS_REMOTE_NEEDS_TOKEN/);
   });
 });

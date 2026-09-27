@@ -1,9 +1,13 @@
 import { create } from "zustand";
+import { persist } from "zustand/middleware";
 import type { BranchInfo, CommitInfo, FileDiff, FileStatus, RepoInfo } from "../types/git";
 import { git } from "../ipc/git";
 import { openBranchName } from "../lib/headBranch";
+import { normalizeRepoPath } from "../lib/repoPath";
 
 import { diffFilePath, mergeWorkingDiffs } from "../lib/mergeWorkingDiffs";
+
+const RECENT_REPO_LIMIT = 12;
 
 function withSyncedHeadBranch(repos: RepoInfo[], activeRepoPath: string | null, branches: BranchInfo[]) {
   if (!activeRepoPath) return repos;
@@ -34,9 +38,20 @@ interface RepoStore {
   refreshDiffs: () => Promise<void>;
   setActiveDiffs: (diffs: FileDiff[], selected?: FileDiff | null) => void;
   setSelectedDiff: (diff: FileDiff | null) => void;
+  /** Refresh persisted recents; keep welcome (no auto-open). */
+  restoreRecentRepos: () => Promise<void>;
+  goToWelcome: () => void;
 }
 
-export const useRepoStore = create<RepoStore>((set, get) => ({
+function bumpRecentRepo(repos: RepoInfo[], info: RepoInfo): RepoInfo[] {
+  const path = normalizeRepoPath(info.path);
+  const rest = repos.filter((r) => normalizeRepoPath(r.path) !== path);
+  return [info, ...rest].slice(0, RECENT_REPO_LIMIT);
+}
+
+export const useRepoStore = create<RepoStore>()(
+  persist(
+    (set, get) => ({
   repos: [],
   activeRepoPath: null,
   commits: [],
@@ -50,8 +65,47 @@ export const useRepoStore = create<RepoStore>((set, get) => ({
 
   addRepo: (info) =>
     set((s) => ({
-      repos: s.repos.find((r) => r.path === info.path) ? s.repos : [...s.repos, info],
+      repos: bumpRecentRepo(s.repos, info),
     })),
+
+  goToWelcome: () =>
+    set({
+      activeRepoPath: null,
+      commits: [],
+      branches: [],
+      status: [],
+      selectedCommit: null,
+      activeDiffs: [],
+      selectedDiff: null,
+      error: null,
+      loading: false,
+    }),
+
+  restoreRecentRepos: async () => {
+    const { repos } = get();
+    if (repos.length === 0) return;
+    const valid: RepoInfo[] = [];
+    for (const r of repos) {
+      try {
+        const info = await git.openRepo(r.path);
+        valid.push(info);
+      } catch {
+        /* drop missing paths */
+      }
+    }
+    set({
+      repos: valid,
+      activeRepoPath: null,
+      commits: [],
+      branches: [],
+      status: [],
+      selectedCommit: null,
+      activeDiffs: [],
+      selectedDiff: null,
+      error: null,
+      loading: false,
+    });
+  },
 
   closeRepo: async (path) => {
     const remaining = get().repos.filter((r) => r.path !== path);
@@ -84,12 +138,16 @@ export const useRepoStore = create<RepoStore>((set, get) => ({
         git.listBranches(path),
         git.getStatus(path),
       ]);
+      const info = await git.openRepo(path);
       set((s) => ({
         commits,
         branches,
         status,
         loading: false,
-        repos: withSyncedHeadBranch(s.repos, path, branches),
+        repos: bumpRecentRepo(
+          withSyncedHeadBranch(s.repos, path, branches),
+          { ...info, headBranch: openBranchName(branches) ?? info.headBranch },
+        ),
       }));
       await get().refreshDiffs();
     } catch (e) {
@@ -151,4 +209,10 @@ export const useRepoStore = create<RepoStore>((set, get) => ({
     set({ activeDiffs: diffs, selectedDiff: selected !== undefined ? selected : null }),
 
   setSelectedDiff: (diff) => set({ selectedDiff: diff }),
-}));
+    }),
+    {
+      name: "meow-git-repos",
+      partialize: (s) => ({ repos: s.repos }),
+    },
+  ),
+);

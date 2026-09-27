@@ -41,11 +41,9 @@ function BreadcrumbDropdown({
         <>
           <div className="fixed inset-0 z-[200]" onClick={() => setOpen(false)} />
           <div
-            className="absolute top-full mt-1 z-[201] py-1 rounded-lg w-[220px] max-w-[min(260px,calc(100vw-24px))] max-h-64 overflow-y-auto shadow-lg"
+            className="absolute top-full mt-1 z-[201] py-1 rounded-lg glass-dropdown-menu w-[220px] max-w-[min(260px,calc(100vw-24px))] max-h-64 overflow-y-auto"
             style={{
               [align === "right" ? "right" : "left"]: 0,
-              background: "var(--bg-surface-2)",
-              border: "1px solid var(--border-strong)",
             }}
             onClick={() => setOpen(false)}
           >

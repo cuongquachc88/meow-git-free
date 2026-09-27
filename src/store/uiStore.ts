@@ -14,8 +14,11 @@ interface UIStore {
   mergeDialogSource: string | null;
   branchDialogFromRef: string | null;
   isAccountManagerOpen: boolean;
+  /** When set, AccountPatDialog collects a PAT for this account id. */
+  patPromptAccountId: string | null;
   isRemoteSetupOpen: boolean;
   remoteSetupDefaultRepoName: string;
+  remoteSetupReason: "no_remote" | "repo_not_found" | null;
   remoteSetupResolve: ((success: boolean) => void) | null;
   /** Full-width center viewer over commit graph (blame / diff). */
   centerFileView: null | "diff" | "blame";
@@ -31,6 +34,8 @@ interface UIStore {
   openMergeDialog: (source?: string) => void;
   closeMergeDialog: () => void;
   toggleAccountManager: () => void;
+  openPatPrompt: (accountId: string) => void;
+  closePatPrompt: () => void;
   openCenterFileView: (mode: "diff" | "blame") => void;
   closeCenterFileView: () => void;
 }
@@ -48,8 +53,10 @@ export const useUIStore = create<UIStore>((set) => ({
   mergeDialogSource: null,
   branchDialogFromRef: null,
   isAccountManagerOpen: false,
+  patPromptAccountId: null,
   isRemoteSetupOpen: false,
   remoteSetupDefaultRepoName: "",
+  remoteSetupReason: null,
   remoteSetupResolve: null,
   centerFileView: null,
 
@@ -69,6 +76,8 @@ export const useUIStore = create<UIStore>((set) => ({
     set({ isMergeDialogOpen: true, mergeDialogSource: source ?? null }),
   closeMergeDialog: () => set({ isMergeDialogOpen: false, mergeDialogSource: null }),
   toggleAccountManager: () => set((s) => ({ isAccountManagerOpen: !s.isAccountManagerOpen })),
+  openPatPrompt: (accountId) => set({ patPromptAccountId: accountId }),
+  closePatPrompt: () => set({ patPromptAccountId: null }),
   openCenterFileView: (centerFileView) => set({ centerFileView }),
   closeCenterFileView: () => set({ centerFileView: null }),
 }));

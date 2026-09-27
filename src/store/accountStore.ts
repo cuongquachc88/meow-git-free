@@ -49,6 +49,13 @@ export const useAccountStore = create<AccountStore>()(
         return accounts.find((a) => a.id === id) ?? null;
       },
     }),
-    { name: "meow-git-accounts" }
-  )
+    {
+      name: "meow-git-accounts",
+      /** Never persist PATs — tokens live only in OS keychain via Rust. */
+      partialize: (s) => ({
+        accounts: s.accounts,
+        repoAccountMap: s.repoAccountMap,
+      }),
+    },
+  ),
 );

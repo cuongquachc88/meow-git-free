@@ -36,6 +36,34 @@ pub struct GithubRepo {
     pub default_branch: String,
 }
 
+pub async fn create_repo(
+    token: &str,
+    name: &str,
+    private: bool,
+    base_url: Option<&str>,
+) -> Result<GithubRepo> {
+    let api_base = base_url.unwrap_or(GITHUB_API);
+    let client = reqwest::Client::new();
+    let resp = client
+        .post(format!("{}/user/repos", api_base))
+        .header("Authorization", format!("Bearer {}", token))
+        .header("Accept", "application/vnd.github+json")
+        .header("User-Agent", "meow-git/0.1")
+        .json(&serde_json::json!({
+            "name": name,
+            "private": private,
+            "auto_init": false,
+        }))
+        .send()
+        .await?;
+    if !resp.status().is_success() {
+        let status = resp.status();
+        let body = resp.text().await.unwrap_or_default();
+        anyhow::bail!("GitHub API {}: {}", status, body);
+    }
+    Ok(resp.json::<GithubRepo>().await?)
+}
+
 pub async fn list_repos(token: &str, base_url: Option<&str>) -> Result<Vec<GithubRepo>> {
     let api_base = base_url.unwrap_or(GITHUB_API);
     let client = reqwest::Client::new();

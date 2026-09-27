@@ -8,7 +8,9 @@ import { useUIStore } from "./store/uiStore";
 import { CommitDialog } from "./components/git/CommitDialog";
 import { BranchDialog } from "./components/git/BranchDialog";
 import { MergeDialog } from "./components/git/MergeDialog";
+import { RemoteSetupDialog } from "./components/git/RemoteSetupDialog";
 import { AccountManager } from "./components/accounts/AccountManager";
+import { AccountPatDialog } from "./components/accounts/AccountPatDialog";
 import { OpenRepoDialog } from "./components/shared/OpenRepoDialog";
 import {
   ResizeHandle,
@@ -16,16 +18,14 @@ import {
   readStoredPanelWidth,
 } from "./components/shared/ResizeHandle";
 import { useRepoStore } from "./store/repoStore";
-import { open as openDialog } from "@tauri-apps/plugin-dialog";
-import { git } from "./ipc/git";
+import { WelcomeScreen } from "./components/welcome/WelcomeScreen";
 
 export const openRepoCallbacks: Array<() => void> = [];
 
 import { PANEL_HEADER_H } from "./constants/layout";
-import { AppLogo } from "./components/shared/AppLogo";
 
 function App() {
-  const { activeRepoPath, selectedCommit, selectedDiff } = useRepoStore();
+  const { activeRepoPath, selectedCommit, selectedDiff, goToWelcome } = useRepoStore();
   const centerFileView = useUIStore((s) => s.centerFileView);
   const closeCenterFileView = useUIStore((s) => s.closeCenterFileView);
 
@@ -59,10 +59,26 @@ function App() {
     if (selectedCommit) setBottomVisible(true);
   }, [selectedCommit]);
 
+  useEffect(() => {
+    const runRestore = () => void useRepoStore.getState().restoreRecentRepos();
+    if (useRepoStore.persist.hasHydrated()) {
+      runRestore();
+      return;
+    }
+    return useRepoStore.persist.onFinishHydration(runRestore);
+  }, []);
+
   return (
     <div className="app-bg flex flex-col h-screen overflow-hidden">
       <ToolBar
-        onOpenRepo={() => setShowOpenDialog(true)}
+        onOpenRepo={() => {
+          if (activeRepoPath) {
+            closeCenterFileView();
+            goToWelcome();
+          } else {
+            setShowOpenDialog(true);
+          }
+        }}
         changesPanelVisible={bottomVisible}
         onToggleChangesPanel={() => setBottomVisible((v) => !v)}
       />
@@ -174,7 +190,9 @@ function App() {
       <CommitDialog />
       <BranchDialog />
       <MergeDialog />
+      <RemoteSetupDialog />
       <AccountManager />
+      <AccountPatDialog />
       {showOpenDialog && <OpenRepoDialog onClose={() => setShowOpenDialog(false)} />}
     </div>
   );
@@ -185,73 +203,6 @@ function PanelCloseIcon() {
     <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.25" strokeLinecap="round">
       <polyline points="9 18 15 12 9 6" />
     </svg>
-  );
-}
-
-function WelcomeScreen({ onOpenRepo }: { onOpenRepo: () => void }) {
-  const { addRepo, setActiveRepo } = useRepoStore();
-
-  const handleQuickOpen = async () => {
-    const selected = await openDialog({ directory: true, multiple: false, title: "Select Repository" });
-    if (!selected) return;
-    try {
-      const info = await git.openRepo(selected as string);
-      addRepo(info);
-      await setActiveRepo(selected as string);
-    } catch {
-      // not a git repo — open dialog with path pre-filled
-      onOpenRepo();
-    }
-  };
-
-  return (
-    <div className="flex-1 flex items-center justify-center">
-      <div className="text-center" style={{ maxWidth: 480 }}>
-        <div className="mx-auto mb-8" style={{ width: 96, height: 96 }}>
-          <AppLogo
-            size={96}
-            style={{
-              filter: "drop-shadow(0 12px 28px rgba(0,0,0,0.35))",
-            }}
-          />
-        </div>
-
-        <h1 className="text-[32px] font-bold tracking-tight mb-2" style={{ color: "var(--text-primary)" }}>
-          Meow Git
-        </h1>
-        <p className="text-[14px] mb-10" style={{ color: "var(--text-muted)" }}>
-          A beautiful Git client · multi-account · multi-provider
-        </p>
-
-        <div className="flex gap-3 justify-center mb-8">
-          <button
-            onClick={handleQuickOpen}
-            className="glass-btn glass-btn-accent px-8 py-3 text-[14px] rounded-xl font-medium"
-          >
-            Open Repository
-          </button>
-          <button
-            onClick={onOpenRepo}
-            className="glass-btn px-6 py-3 text-[14px] rounded-xl"
-            style={{ color: "var(--text-secondary)" }}
-          >
-            Clone Remote
-          </button>
-        </div>
-
-        <div className="flex flex-wrap gap-2 justify-center">
-          {["GitHub", "GitLab", "Bitbucket", "Azure DevOps", "Gitea"].map((p) => (
-            <span
-              key={p}
-              className="px-3 py-1 rounded-full text-[11px]"
-              style={{ background: "var(--bg-surface-2)", border: "1px solid var(--border)", color: "var(--text-muted)" }}
-            >
-              {p}
-            </span>
-          ))}
-        </div>
-      </div>
-    </div>
   );
 }
 

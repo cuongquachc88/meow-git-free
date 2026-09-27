@@ -1,9 +1,21 @@
+import { useEffect, useState } from "react";
 import { useRepoStore } from "../../store/repoStore";
 import { useUIStore, Theme } from "../../store/uiStore";
 import { useAccountStore } from "../../store/accountStore";
 import { accounts as accountsIpc } from "../../ipc/accounts";
 import { git } from "../../ipc/git";
-import { getBoundToken, pushBranch } from "../../lib/remoteSync";
+import { ensureRemoteBeforeSync } from "../../lib/ensureRemote";
+import { isNoRemoteError, resolveRemoteName } from "../../lib/remoteSync";
+import { pickAccountIdWithToken } from "../../lib/accountToken";
+import { requestAccountPat } from "../../lib/requestAccountPat";
+import { useAccountTokenStatus } from "../../hooks/useAccountTokenStatus";
+import {
+  SyncCancelledError,
+  describeSyncError,
+  isAuthSyncError,
+  pullRepoBranch,
+  pushRepoBranch,
+} from "../../lib/syncRemote";
 import { RepoBranchPicker } from "./RepoBranchPicker";
 import { TOOLBAR_BRAND_H } from "../../constants/layout";
 import { AppLogo } from "../shared/AppLogo";
@@ -14,6 +26,7 @@ import {
   IconFetch,
   IconMerge,
   IconMoon,
+  IconPanelFiles,
   IconPull,
   IconPush,
   IconRefresh,
@@ -37,46 +50,146 @@ export function ToolBar({
 
   const headBranch = branches.find((b) => b.isHead);
   const boundAccount = activeRepoPath ? getAccountForRepo(activeRepoPath) : null;
+  const [toolbarAccountId, setToolbarAccountId] = useState("");
+
+  useEffect(() => {
+    if (!activeRepoPath) {
+      setToolbarAccountId("");
+      return;
+    }
+    let cancelled = false;
+    void pickAccountIdWithToken(accounts, boundAccount?.id).then(({ accountId }) => {
+      if (!cancelled) setToolbarAccountId(accountId);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [activeRepoPath, boundAccount?.id, accounts]);
+
+  const tokenStatus = useAccountTokenStatus(accounts);
+  const toolbarAccount = accounts.find((a) => a.id === toolbarAccountId) ?? null;
+  const toolbarHasToken = toolbarAccountId ? !!tokenStatus[toolbarAccountId] : false;
 
   const getToken = async (accountId: string) => {
     try { return await accountsIpc.getToken(accountId); }
     catch { return null; }
   };
 
+  const runFetch = async () => {
+    if (!activeRepoPath) return;
+    const remote = await resolveRemoteName(activeRepoPath);
+    if (toolbarAccount) {
+      const token = await getToken(toolbarAccount.id);
+      if (token) {
+        await git.fetchWithToken(activeRepoPath, remote, toolbarAccount.username, token);
+        await Promise.all([refreshLog(), refreshBranches()]);
+        return;
+      }
+    }
+    await git.fetchRemote(activeRepoPath, remote);
+    await Promise.all([refreshLog(), refreshBranches()]);
+  };
+
   const handleFetch = async () => {
     if (!activeRepoPath) return;
+    if (!(await ensureRemoteBeforeSync(activeRepoPath))) return;
     try {
-      if (boundAccount) {
-        const token = await getToken(boundAccount.id);
-        if (token) {
-          await git.fetchWithToken(activeRepoPath, "origin", boundAccount.username, token);
-          await Promise.all([refreshLog(), refreshBranches()]);
+      await runFetch();
+    } catch (e) {
+      if (isNoRemoteError(e) && (await ensureRemoteBeforeSync(activeRepoPath))) {
+        try {
+          await runFetch();
           return;
+        } catch (retry) {
+          e = retry;
         }
       }
-      await git.fetchRemote(activeRepoPath, "origin");
-      await Promise.all([refreshLog(), refreshBranches()]);
-    } catch (e) {
       alert(`Fetch failed: ${e}`);
+    }
+  };
+
+  const promptPatAndSave = async (): Promise<boolean> => {
+    const acct = toolbarAccount ?? boundAccount ?? accounts[0] ?? null;
+    if (!acct) return false;
+    const pat = await requestAccountPat(acct.id);
+    if (pat) {
+      setToolbarAccountId(acct.id);
+      if (activeRepoPath) bindRepoToAccount(activeRepoPath, acct.id);
+      return true;
+    }
+    return false;
+  };
+
+  const handleAuthSyncFailure = async (action: "Pull" | "Push", e: unknown): Promise<boolean> => {
+    const msg = describeSyncError(e);
+    if (!msg) return true;
+    if (!isAuthSyncError(e)) {
+      return false;
+    }
+    if (await promptPatAndSave()) return false;
+    const open = window.confirm(`${msg}\n\nOpen Accounts to add a token?`);
+    if (open) toggleAccountManager();
+    return true;
+  };
+
+  const handlePull = async () => {
+    if (!activeRepoPath || !headBranch) return;
+    try {
+      const clean = await pullRepoBranch(
+        activeRepoPath,
+        headBranch.name,
+        getAccountForRepo,
+        toolbarAccountId || null,
+      );
+      await Promise.all([refreshLog(), refreshBranches(), refreshStatus()]);
+      if (!clean) alert("Pull has conflicts — resolve in Files.");
+    } catch (e) {
+      if (e instanceof SyncCancelledError) return;
+      if (await handleAuthSyncFailure("Pull", e)) return;
+      try {
+        const clean = await pullRepoBranch(
+          activeRepoPath,
+          headBranch.name,
+          getAccountForRepo,
+          toolbarAccountId || null,
+        );
+        await Promise.all([refreshLog(), refreshBranches(), refreshStatus()]);
+        if (!clean) alert("Pull has conflicts — resolve in Files.");
+      } catch (retry) {
+        if (retry instanceof SyncCancelledError) return;
+        const msg = describeSyncError(retry);
+        if (msg) alert(`Pull failed: ${msg}`);
+      }
     }
   };
 
   const handlePush = async () => {
     if (!activeRepoPath || !headBranch) return;
-    try {
-      const creds = await getBoundToken(activeRepoPath, getAccountForRepo);
-      await pushBranch(activeRepoPath, headBranch.name, creds);
+
+    const runPush = async () => {
+      await pushRepoBranch(
+        activeRepoPath,
+        headBranch.name,
+        getAccountForRepo,
+        toolbarAccountId || null,
+      );
       await refreshBranches();
+    };
+
+    try {
+      await runPush();
     } catch (e) {
-      const msg = String(e);
-      if (/credentials|Bind|account/i.test(msg)) {
-        const open = window.confirm(
-          `${msg}\n\nOpen Accounts to add a token or pick an account for this repo?`,
-        );
-        if (open) toggleAccountManager();
-      } else {
-        alert(`Push failed: ${msg}`);
+      if (e instanceof SyncCancelledError) return;
+      if (await handleAuthSyncFailure("Push", e)) return;
+      try {
+        await runPush();
+        return;
+      } catch (retryAfterPat) {
+        e = retryAfterPat;
       }
+
+      const msg = describeSyncError(e);
+      if (msg) alert(`Push failed: ${msg}`);
     }
   };
 
@@ -101,15 +214,15 @@ export function ToolBar({
       >
         <button
           type="button"
-          onClick={!activeRepoPath ? onOpenRepo : undefined}
+          onClick={onOpenRepo}
           className="shrink-0 rounded-[7px] overflow-hidden transition-opacity hover:opacity-90"
           style={{
             width: 28,
             height: 28,
             boxShadow: "0 1px 2px rgba(0,0,0,0.12)",
-            cursor: activeRepoPath ? "default" : "pointer",
+            cursor: "pointer",
           }}
-          title={activeRepoPath ? "Meow Git" : "Open repository"}
+          title={activeRepoPath ? "Back to welcome" : "Open repository"}
         >
           <AppLogo size={28} />
         </button>
@@ -118,35 +231,47 @@ export function ToolBar({
 
       {activeRepoPath && (
         <div className="flex items-center gap-1.5 ml-2 shrink-0 min-w-0">
-          {!changesPanelVisible && onToggleChangesPanel && (
-            <button onClick={onToggleChangesPanel} className={ctrl} title="Show files and diff">
-              Files
-            </button>
-          )}
-
           {accounts.length > 0 && (
             <select
               className="glass-input toolbar-control shrink-0"
-              value={boundAccount?.id ?? ""}
+              value={toolbarAccountId}
               onChange={(e) => {
-                if (e.target.value) bindRepoToAccount(activeRepoPath, e.target.value);
+                const id = e.target.value;
+                setToolbarAccountId(id);
+                if (id) bindRepoToAccount(activeRepoPath, id);
               }}
-              title="Account for HTTPS push/pull (optional if using SSH)"
+              title={
+                toolbarAccount && !toolbarHasToken
+                  ? "No PAT in keychain — push will ask for a token"
+                  : "Account for HTTPS push/pull/fetch (required when origin URL is https://)"
+              }
+              style={
+                toolbarAccount && !toolbarHasToken
+                  ? { borderColor: "rgba(251, 146, 60, 0.55)" }
+                  : undefined
+              }
             >
               <option value="">SSH / system</option>
               {accounts.map((a) => (
                 <option key={a.id} value={a.id}>
                   {a.username} ({a.provider})
+                  {tokenStatus[a.id] === false ? " · no token" : ""}
                 </option>
               ))}
             </select>
           )}
 
           <div className="toolbar-divider mx-0.5 shrink-0" />
+          {!changesPanelVisible && onToggleChangesPanel && (
+            <button onClick={onToggleChangesPanel} className={gitBtn} title="Show files panel">
+              <IconPanelFiles size={14} />
+              <span>Files</span>
+            </button>
+          )}
           <button onClick={handleFetch} className={gitBtn} title="Fetch">
             <IconFetch size={14} /><span>Fetch</span>
           </button>
-          <button onClick={handleFetch} className={gitBtn} title="Pull">
+          <button onClick={handlePull} className={gitBtn} title="Pull current branch">
             <IconPull size={14} /><span>Pull</span>
           </button>
           <button onClick={handlePush} className={gitBtn} title="Push">

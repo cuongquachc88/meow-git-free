@@ -5,6 +5,8 @@ import { useRepoStore } from "../../store/repoStore";
 import type { ProviderKind } from "../../types/accounts";
 import { accounts as accountsIpc } from "../../ipc/accounts";
 import { openUrl } from "@tauri-apps/plugin-opener";
+import { useAccountTokenStatus } from "../../hooks/useAccountTokenStatus";
+import { requestAccountPat } from "../../lib/requestAccountPat";
 
 const PROVIDERS: {
   value: ProviderKind;
@@ -62,6 +64,19 @@ const PROVIDERS: {
   },
 ];
 
+const ACCOUNT_USAGE_NOTE: Record<ProviderKind, string> = {
+  github:
+    "Used for HTTPS fetch, pull, and push. Pick this account in the toolbar dropdown for each repo (not “SSH / system”). The repo scope also lets Meow Git create a GitHub repository when you push with no remote.",
+  gitlab:
+    "Used for HTTPS fetch, pull, and push. Pick this account in the toolbar for each repo. The api scope lets Meow Git create a GitLab project when you push with no remote.",
+  bitbucket:
+    "Used for HTTPS fetch, pull, and push. Pick this account in the toolbar for each repo. Create the Bitbucket repo on the website first, then push.",
+  azure:
+    "Used for HTTPS Git operations when you set the clone URL. Pick this account in the toolbar for each repo.",
+  gitea:
+    "Used for HTTPS fetch, pull, and push against your instance. Pick this account in the toolbar for each repo.",
+};
+
 const PROVIDER_BG: Record<ProviderKind, string> = {
   github:    "rgba(99,102,241,0.12)",
   gitlab:    "rgba(251,146,60,0.10)",
@@ -81,6 +96,7 @@ export function AccountManager() {
   const [adding, setAdding] = useState(false);
   const [error, setError] = useState("");
   const [showToken, setShowToken] = useState(false);
+  const tokenStatus = useAccountTokenStatus(accounts);
 
   if (!isAccountManagerOpen) return null;
 
@@ -92,14 +108,22 @@ export function AccountManager() {
     setAdding(true);
     setError("");
     try {
-      const account = await accountsIpc.createAccount(
-        provider,
-        username.trim(),
-        "pat",
-        baseUrl.trim() || undefined
+      const existing = accounts.find(
+        (a) => a.provider === provider && a.username.toLowerCase() === username.trim().toLowerCase(),
       );
-      await addAccount(account, token.trim());
-      if (activeRepoPath) bindRepoToAccount(activeRepoPath, account.id);
+      if (existing) {
+        await accountsIpc.storeToken(existing.id, token.trim());
+        if (activeRepoPath) bindRepoToAccount(activeRepoPath, existing.id);
+      } else {
+        const account = await accountsIpc.createAccount(
+          provider,
+          username.trim(),
+          "pat",
+          baseUrl.trim() || undefined,
+        );
+        await addAccount(account, token.trim());
+        if (activeRepoPath) bindRepoToAccount(activeRepoPath, account.id);
+      }
       setUsername("");
       setToken("");
       setBaseUrl("");
@@ -131,7 +155,7 @@ export function AccountManager() {
               Account Manager
             </h2>
             <p className="text-[11px] mt-0.5" style={{ color: "var(--text-muted)" }}>
-              Add multiple accounts per provider — each gets its own token
+              PATs stay in macOS Keychain / Windows Credential Manager — never in browser localStorage
             </p>
           </div>
           <button onClick={toggleAccountManager} className="glass-btn w-7 h-7 p-0 rounded-lg text-[12px]">
@@ -228,7 +252,10 @@ export function AccountManager() {
               </div>
               <p className="text-[10px] mt-1" style={{ color: "var(--text-faint)" }}>
                 Required scopes: <span style={{ color: "var(--text-muted)" }}>{selectedProvider.tokenScopes}</span>
-                {" · "} Stored securely in OS keychain
+                {" · "} Stored in macOS Keychain / Windows Credential Manager
+              </p>
+              <p className="text-[10px] mt-2 leading-relaxed" style={{ color: "var(--text-muted)" }}>
+                {ACCOUNT_USAGE_NOTE[provider]}
               </p>
             </div>
           </div>
@@ -282,9 +309,22 @@ export function AccountManager() {
                       </div>
                       <div
                         className="w-2 h-2 rounded-full shrink-0"
-                        style={{ background: prov?.color, boxShadow: `0 0 6px ${prov?.color}` }}
-                        title="Connected"
+                        style={{
+                          background: tokenStatus[a.id] ? prov?.color : "rgba(251,146,60,0.9)",
+                          boxShadow: tokenStatus[a.id] ? `0 0 6px ${prov?.color}` : undefined,
+                        }}
+                        title={tokenStatus[a.id] ? "PAT in keychain" : "No PAT — HTTPS push will fail"}
                       />
+                      {!tokenStatus[a.id] && (
+                        <button
+                          type="button"
+                          onClick={() => void requestAccountPat(a.id)}
+                          className="text-[11px] shrink-0 px-2 py-1 rounded-lg border"
+                          style={{ borderColor: "var(--border)", color: "var(--text-muted)" }}
+                        >
+                          Add token
+                        </button>
+                      )}
                       <button
                         onClick={() => removeAccount(a.id)}
                         className="text-[11px] transition-colors shrink-0 ml-1"

@@ -3,7 +3,7 @@ import { createPortal } from "react-dom";
 import { useRepoStore } from "../../store/repoStore";
 import { useUIStore } from "../../store/uiStore";
 import { useAccountStore } from "../../store/accountStore";
-import { getBoundToken, pullBranch, pushBranch } from "../../lib/remoteSync";
+import { SyncCancelledError, describeSyncError, pullRepoBranch, pushRepoBranch } from "../../lib/syncRemote";
 import { git } from "../../ipc/git";
 import type { BranchInfo } from "../../types/git";
 import { APP_VERSION } from "../../constants/appVersion";
@@ -40,23 +40,25 @@ export function Sidebar({ onOpenRepo, onHide }: { onOpenRepo: () => void; onHide
   const handlePushBranch = async (localBranchName: string) => {
     if (!activeRepoPath) return;
     try {
-      const creds = await getBoundToken(activeRepoPath, getAccountForRepo);
-      await pushBranch(activeRepoPath, localBranchName, creds);
+      await pushRepoBranch(activeRepoPath, localBranchName, getAccountForRepo);
       await refreshAfterSync();
     } catch (e) {
-      alert(`Push failed: ${e}`);
+      if (e instanceof SyncCancelledError) return;
+      const msg = describeSyncError(e);
+      if (msg) alert(`Push failed: ${msg}`);
     }
   };
 
   const handlePullBranch = async (localBranchName: string) => {
     if (!activeRepoPath) return;
     try {
-      const creds = await getBoundToken(activeRepoPath, getAccountForRepo);
-      const clean = await pullBranch(activeRepoPath, localBranchName, creds);
+      const clean = await pullRepoBranch(activeRepoPath, localBranchName, getAccountForRepo);
       await refreshAfterSync();
       if (!clean) alert("Pull has conflicts — resolve in Files & diff.");
     } catch (e) {
-      alert(`Pull failed: ${e}`);
+      if (e instanceof SyncCancelledError) return;
+      const msg = describeSyncError(e);
+      if (msg) alert(`Pull failed: ${msg}`);
     }
   };
 
@@ -258,24 +260,6 @@ export function Sidebar({ onOpenRepo, onHide }: { onOpenRepo: () => void; onHide
               open={openSections.local}
               onToggle={() => toggleSection("local")}
             >
-              <div className="flex gap-1 px-2 pb-1.5">
-                <button
-                  type="button"
-                  disabled={!activeRepoPath}
-                  onClick={() => openBranchDialog()}
-                  className="flex-1 glass-btn text-[10px] py-1 rounded-md"
-                >
-                  + New branch
-                </button>
-                <button
-                  type="button"
-                  disabled={!activeRepoPath || localBranches.length < 2}
-                  onClick={() => openMergeDialog()}
-                  className="flex-1 glass-btn text-[10px] py-1 rounded-md"
-                >
-                  Merge…
-                </button>
-              </div>
               {filteredLocal.length === 0 ? (
                 <EmptyHint text={q ? "No matching branches" : "No local branches"} />
               ) : (

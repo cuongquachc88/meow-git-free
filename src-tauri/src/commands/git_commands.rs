@@ -132,6 +132,11 @@ pub fn add_remote(path: String, name: String, url: String) -> Result<(), String>
 }
 
 #[tauri::command]
+pub fn upsert_remote(path: String, name: String, url: String) -> Result<(), String> {
+    remotes::upsert_remote(&path, &name, &url).map_err(|e| e.to_string())
+}
+
+#[tauri::command]
 pub fn remove_remote(path: String, name: String) -> Result<(), String> {
     remotes::remove_remote(&path, &name).map_err(|e| e.to_string())
 }

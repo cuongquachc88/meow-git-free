@@ -48,6 +48,8 @@ export const git = {
 
   listRemotes: (path: string) => invoke<RemoteInfo[]>("list_remotes", { path }),
   addRemote: (path: string, name: string, url: string) => invoke<void>("add_remote", { path, name, url }),
+  upsertRemote: (path: string, name: string, url: string) =>
+    invoke<void>("upsert_remote", { path, name, url }),
   removeRemote: (path: string, name: string) => invoke<void>("remove_remote", { path, name }),
   fetchRemote: (path: string, remoteName: string) => invoke<void>("fetch_remote", { path, remoteName }),
   fetchWithToken: (path: string, remoteName: string, username: string, token: string) =>
