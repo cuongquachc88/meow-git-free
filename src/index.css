@@ -2,35 +2,354 @@
 @tailwind components;
 @tailwind utilities;
 
-* {
-  box-sizing: border-box;
-  margin: 0;
-  padding: 0;
+/* ─── CSS Variables — Dark (default) ─── */
+:root, .dark {
+  --bg-base:        #0d0f1a;
+  --bg-deep:        #080a14;
+  --bg-surface:     rgba(255,255,255,0.04);
+  --bg-surface-2:   rgba(255,255,255,0.07);
+  --bg-hover:       rgba(255,255,255,0.06);
+
+  --text-primary:   rgba(255,255,255,0.88);
+  --text-secondary: rgba(255,255,255,0.50);
+  --text-muted:     rgba(255,255,255,0.25);
+  --text-faint:     rgba(255,255,255,0.12);
+
+  --border:         rgba(255,255,255,0.08);
+  --border-strong:  rgba(255,255,255,0.14);
+  --border-focus:   rgba(99,102,241,0.6);
+
+  --glass-bg:       rgba(255,255,255,0.05);
+  --glass-sidebar:  rgba(10,12,24,0.75);
+  --glass-toolbar:  rgba(13,15,28,0.82);
+  --glass-panel:    rgba(18,20,38,0.88);
+  --glass-blur:     blur(24px) saturate(180%);
+
+  --rim-top:        rgba(255,255,255,0.18);
+  --rim-bot:        rgba(0,0,0,0.12);
+  --shadow-drop:    0 20px 60px rgba(0,0,0,0.5);
+
+  --accent:         #818cf8;
+  --accent-bg:      rgba(99,102,241,0.25);
+  --accent-border:  rgba(129,140,248,0.35);
+  --accent-glow:    rgba(99,102,241,0.3);
+
+  --grad-1:         rgba(99,102,241,0.12);
+  --grad-2:         rgba(168,85,247,0.10);
+
+  --diff-add-bg:    rgba(34,197,94,0.08);
+  --diff-add-text:  #86efac;
+  --diff-del-bg:    rgba(239,68,68,0.08);
+  --diff-del-text:  #fca5a5;
+  --diff-hunk-bg:   rgba(99,102,241,0.06);
+  --diff-hunk-text: rgba(165,180,252,0.55);
+
+  color-scheme: dark;
 }
 
-html, body, #root {
-  height: 100%;
+/* ─── Light theme ─── */
+.light {
+  --bg-base:        #eceef8;
+  --bg-deep:        #e2e4f2;
+  --bg-surface:     rgba(255,255,255,0.80);
+  --bg-surface-2:   rgba(255,255,255,0.95);
+  --bg-hover:       rgba(80,90,200,0.06);
+
+  --text-primary:   rgba(10,12,28,0.88);
+  --text-secondary: rgba(10,12,28,0.58);
+  --text-muted:     rgba(10,12,28,0.38);
+  --text-faint:     rgba(10,12,28,0.20);
+
+  --border:         rgba(80,90,200,0.12);
+  --border-strong:  rgba(80,90,200,0.20);
+  --border-focus:   rgba(99,102,241,0.5);
+
+  --glass-bg:       rgba(255,255,255,0.72);
+  --glass-sidebar:  rgba(232,234,248,0.88);
+  --glass-toolbar:  rgba(240,242,252,0.92);
+  --glass-panel:    rgba(255,255,255,0.92);
+  --glass-blur:     blur(24px) saturate(160%);
+
+  --rim-top:        rgba(255,255,255,0.95);
+  --rim-bot:        rgba(0,0,0,0.04);
+  --shadow-drop:    0 20px 60px rgba(0,0,0,0.10);
+
+  --accent:         #4f46e5;
+  --accent-bg:      rgba(99,102,241,0.10);
+  --accent-border:  rgba(99,102,241,0.28);
+  --accent-glow:    rgba(99,102,241,0.12);
+
+  --grad-1:         rgba(99,102,241,0.07);
+  --grad-2:         rgba(168,85,247,0.06);
+
+  --diff-add-bg:    rgba(34,197,94,0.08);
+  --diff-add-text:  #166534;
+  --diff-del-bg:    rgba(239,68,68,0.07);
+  --diff-del-text:  #991b1b;
+  --diff-hunk-bg:   rgba(99,102,241,0.05);
+  --diff-hunk-text: #4338ca;
+
+  color-scheme: light;
+}
+
+/* ─── Reset ─── */
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+html, body, #root { height: 100%; overflow: hidden; }
+body {
+  font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI", sans-serif;
+  background: var(--bg-base);
+  color: var(--text-primary);
+  -webkit-font-smoothing: antialiased;
+  transition: background 0.25s, color 0.25s;
+}
+
+/* ─── App background ─── */
+.app-bg {
+  background:
+    radial-gradient(ellipse 80% 50% at 20% 0%,   var(--grad-1) 0%, transparent 60%),
+    radial-gradient(ellipse 60% 40% at 80% 100%,  var(--grad-2) 0%, transparent 60%),
+    var(--bg-base);
+}
+
+/* ─── Glass Sidebar ─── */
+.glass-sidebar {
+  background: var(--glass-sidebar);
+  backdrop-filter: var(--glass-blur);
+  -webkit-backdrop-filter: var(--glass-blur);
+  border-right: 1px solid var(--border);
+  box-shadow: inset -1px 0 0 var(--border), 4px 0 24px rgba(0,0,0,0.15);
+}
+
+/* Panel title row (Branches, Files & diff) — blends into glass, not a solid block */
+.panel-title-bar {
+  background:
+    linear-gradient(180deg, var(--grad-1) 0%, transparent 72%),
+    linear-gradient(90deg, var(--grad-2) 0%, transparent 45%);
+  border-bottom: 1px solid var(--border);
+  box-shadow: inset 0 1px 0 var(--rim-top);
+}
+.light .panel-title-bar {
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.55) 0%, transparent 70%),
+    linear-gradient(135deg, var(--grad-1) 0%, transparent 50%);
+}
+
+/* ─── Glass Toolbar ─── */
+.glass-toolbar {
+  background: var(--glass-toolbar);
+  backdrop-filter: blur(20px) saturate(200%);
+  -webkit-backdrop-filter: blur(20px) saturate(200%);
+  border-bottom: 1px solid var(--border);
+  box-shadow: inset 0 1px 0 var(--rim-top), 0 4px 20px rgba(0,0,0,0.12);
+}
+
+/* ─── Glass Panel (modals) ─── */
+.glass-panel {
+  background: var(--glass-panel);
+  backdrop-filter: blur(40px) saturate(200%) brightness(1.04);
+  -webkit-backdrop-filter: blur(40px) saturate(200%) brightness(1.04);
+  border: 1px solid var(--border-strong);
+  border-radius: 16px;
+  box-shadow:
+    inset 0 1px 0 var(--rim-top),
+    inset 0 -1px 0 var(--rim-bot),
+    var(--shadow-drop);
+  position: relative;
   overflow: hidden;
 }
-
-body {
-  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
-  background: #030712;
-  color: #d1d5db;
-  -webkit-font-smoothing: antialiased;
+.glass-panel::before {
+  content: '';
+  position: absolute; top: 0; left: 0; right: 0; height: 1px;
+  background: linear-gradient(90deg, transparent, var(--rim-top), transparent);
+  pointer-events: none;
 }
 
-::-webkit-scrollbar {
-  width: 6px;
-  height: 6px;
+/* ─── Glass Button ─── */
+.glass-btn {
+  background: var(--bg-surface);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  box-shadow: inset 0 1px 0 var(--rim-top), 0 2px 6px rgba(0,0,0,0.1);
+  color: var(--text-secondary);
+  cursor: pointer;
+  font-size: 12.5px;
+  padding: 5px 12px;
+  transition: background 0.12s, border-color 0.12s, box-shadow 0.12s, color 0.12s, transform 0.1s;
+  position: relative;
+  white-space: nowrap;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
 }
-::-webkit-scrollbar-track {
-  background: transparent;
+.glass-btn:hover {
+  background: var(--bg-surface-2);
+  border-color: var(--border-strong);
+  color: var(--text-primary);
+  transform: translateY(-1px);
+  box-shadow: inset 0 1px 0 var(--rim-top), 0 4px 12px rgba(0,0,0,0.15);
 }
-::-webkit-scrollbar-thumb {
-  background: #374151;
-  border-radius: 3px;
+.glass-btn:active { transform: translateY(0); background: var(--bg-surface); }
+.glass-btn:disabled { opacity: 0.35; cursor: not-allowed; transform: none; }
+
+/* ─── Accent button ─── */
+.glass-btn-accent {
+  background: var(--accent-bg);
+  border-color: var(--accent-border);
+  color: var(--accent);
+  box-shadow: inset 0 1px 0 rgba(255,255,255,0.2), 0 4px 16px var(--accent-glow);
 }
-::-webkit-scrollbar-thumb:hover {
-  background: #4b5563;
+.glass-btn-accent:hover {
+  background: rgba(99,102,241,0.35);
+  border-color: var(--accent);
+  color: white;
+  box-shadow: inset 0 1px 0 rgba(255,255,255,0.25), 0 6px 24px var(--accent-glow);
+}
+
+/* ─── Glass Input ─── */
+.glass-input {
+  background: var(--bg-surface);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  color: var(--text-primary);
+  font-size: 13px;
+  padding: 7px 10px;
+  outline: none;
+  width: 100%;
+  transition: border-color 0.15s, box-shadow 0.15s;
+}
+.glass-input:focus {
+  border-color: var(--border-focus);
+  box-shadow: 0 0 0 3px rgba(99,102,241,0.12);
+}
+.glass-input::placeholder { color: var(--text-muted); }
+
+select.glass-input {
+  line-height: 1.2;
+  appearance: auto;
+}
+
+/* ─── Section header ─── */
+.section-header {
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+  padding: 8px 12px 3px;
+  display: block;
+}
+
+/* ─── Diff ─── */
+.diff-add { background: var(--diff-add-bg); }
+.diff-del { background: var(--diff-del-bg); }
+.diff-hunk { background: var(--diff-hunk-bg); }
+
+/* ─── Branch pill ─── */
+.branch-pill {
+  background: var(--accent-bg);
+  border: 1px solid var(--accent-border);
+  border-radius: 20px;
+  font-size: 10px;
+  padding: 1px 8px;
+  color: var(--accent);
+  white-space: nowrap;
+}
+
+/* ─── Scrollbars ─── */
+::-webkit-scrollbar { width: 5px; height: 5px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: var(--border-strong); border-radius: 3px; }
+::-webkit-scrollbar-thumb:hover { background: var(--text-muted); }
+
+/* ─── Light mode: override hardcoded Tailwind white/opacity classes ─── */
+.light {
+  color-scheme: light;
+}
+.light .app-bg {
+  background:
+    radial-gradient(ellipse 80% 50% at 20% 0%,   var(--grad-1) 0%, transparent 60%),
+    radial-gradient(ellipse 60% 40% at 80% 100%,  var(--grad-2) 0%, transparent 60%),
+    var(--bg-base);
+}
+/* Map white/opacity to dark text in light mode */
+.light [class*="text-white"] { color: var(--text-primary); }
+.light [class*="text-white/80"] { color: var(--text-primary); }
+.light [class*="text-white/50"] { color: var(--text-secondary); }
+.light [class*="text-white/30"],
+.light [class*="text-white/40"] { color: var(--text-muted); }
+.light [class*="border-white/"] { border-color: var(--border); }
+.light [class*="bg-white/"] { background-color: var(--bg-surface); }
+/* Toolbar & sidebar in light mode */
+.light .glass-toolbar { box-shadow: inset 0 1px 0 var(--rim-top), 0 2px 8px rgba(0,0,0,0.06); }
+.light .glass-sidebar { box-shadow: inset -1px 0 0 var(--border), 2px 0 12px rgba(0,0,0,0.06); }
+
+/* ─── Commit compose + amend switch ─── */
+.commit-compose {
+  shrink: 0;
+  border-top: 1px solid var(--border);
+  background: linear-gradient(180deg, var(--bg-surface) 0%, var(--bg-base) 100%);
+  padding: 10px 12px 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.commit-compose--compact { padding: 8px 10px 10px; gap: 8px; }
+.commit-compose__header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.commit-compose__actions {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+.amend-switch {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 10px;
+  border-radius: 10px;
+  border: 1px solid var(--border);
+  background: var(--bg-surface-2);
+  transition: border-color 0.15s, box-shadow 0.15s, background 0.15s;
+}
+.amend-switch:not(:disabled):hover {
+  border-color: var(--border-focus);
+  background: var(--bg-hover);
+}
+.amend-switch--on {
+  border-color: var(--accent-border);
+  background: var(--accent-bg);
+  box-shadow: inset 0 0 0 1px rgba(99, 102, 241, 0.12);
+}
+.amend-switch__track {
+  position: relative;
+  width: 34px;
+  height: 18px;
+  border-radius: 999px;
+  background: var(--bg-base);
+  border: 1px solid var(--border);
+  flex-shrink: 0;
+  transition: background 0.15s, border-color 0.15s;
+}
+.amend-switch--on .amend-switch__track {
+  background: rgba(99, 102, 241, 0.35);
+  border-color: var(--accent);
+}
+.amend-switch__knob {
+  position: absolute;
+  top: 1px;
+  left: 1px;
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  background: var(--text-muted);
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.25);
+  transition: transform 0.15s, background 0.15s;
+}
+.amend-switch--on .amend-switch__knob {
+  transform: translateX(16px);
+  background: var(--accent);
 }
