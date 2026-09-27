@@ -7,7 +7,7 @@ export function PRPanel() {
   const { activeRepoPath } = useRepoStore();
   const { getAccountForRepo } = useAccountStore();
   const [prs, setPrs] = useState<PullRequest[]>([]);
-  const [loading, setLoading] = useState(false);
+  const [_loading, _setLoading] = useState(false);
 
   // PR loading requires knowing the owner/repo from the remote URL
   // This is a placeholder — actual implementation calls provider API via Tauri
