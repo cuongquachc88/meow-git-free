@@ -26,6 +26,8 @@ export interface BranchInfo {
   kind: "Local" | "Remote";
   upstream: string | null;
   tipId: string | null;
+  ahead: number | null;
+  behind: number | null;
 }
 
 export interface FileStatus {
@@ -85,4 +87,15 @@ export interface StashEntry {
   index: number;
   message: string;
   id: string;
+}
+
+export interface BlameLine {
+  lineNo: number;
+  commitId: string;
+  shortId: string;
+  author: string;
+  authorEmail: string;
+  timestamp: number;
+  summary: string;
+  content: string;
 }
