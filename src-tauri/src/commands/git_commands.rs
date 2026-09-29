@@ -162,6 +162,23 @@ pub fn push_branch(path: String, remote_name: String, branch: String) -> Result<
 }
 
 #[tauri::command]
+pub fn push_tag(path: String, remote_name: String, tag_name: String) -> Result<(), String> {
+    remotes::push_tag(&path, &remote_name, &tag_name).map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+pub fn push_tag_with_token(
+    path: String,
+    remote_name: String,
+    tag_name: String,
+    username: String,
+    token: String,
+) -> Result<(), String> {
+    remotes::push_tag_with_token(&path, &remote_name, &tag_name, &username, &token)
+        .map_err(|e| e.to_string())
+}
+
+#[tauri::command]
 pub fn pull_branch(path: String, remote_name: String, branch: String) -> Result<bool, String> {
     remotes::pull_branch(&path, &remote_name, &branch).map_err(|e| e.to_string())
 }

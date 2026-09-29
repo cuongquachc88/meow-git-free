@@ -45,7 +45,8 @@ export function ToolBar({
   changesPanelVisible?: boolean;
   onToggleChangesPanel?: () => void;
 }) {
-  const { activeRepoPath, refreshLog, refreshBranches, refreshStatus, branches } = useRepoStore();
+  const { activeRepoPath, refreshAfterRemoteSync, refreshLog, refreshBranches, refreshStatus, branches } =
+    useRepoStore();
   const { openCommitDialog, openBranchDialog, openMergeDialog, toggleAccountManager, theme, setTheme } =
     useUIStore();
   const { getAccountForRepo, accounts, bindRepoToAccount } = useAccountStore();
@@ -82,12 +83,12 @@ export function ToolBar({
       const token = await readStoredToken(toolbarAccount.id);
       if (token) {
         await git.fetchWithToken(activeRepoPath, remote, toolbarAccount.username, token);
-        await Promise.all([refreshLog(), refreshBranches()]);
+        await refreshAfterRemoteSync();
         return;
       }
     }
     await git.fetchRemote(activeRepoPath, remote);
-    await Promise.all([refreshLog(), refreshBranches()]);
+    await refreshAfterRemoteSync();
   };
 
   const handleFetch = async () => {
@@ -133,6 +134,10 @@ export function ToolBar({
     if (!isAuthSyncError(e)) {
       return false;
     }
+    const acct = toolbarAccount ?? boundAccount ?? accounts[0] ?? null;
+    if (acct && (await readStoredToken(acct.id))) {
+      return false;
+    }
     if (await promptPatAndSave()) return false;
     showSyncToast("Add a PAT once in Accounts — it stays in Keychain", "err");
     return true;
@@ -149,7 +154,7 @@ export function ToolBar({
         getAccountForRepo,
         toolbarAccountId || null,
       );
-      await Promise.all([refreshLog(), refreshBranches(), refreshStatus()]);
+      await refreshAfterRemoteSync();
       if (!clean) {
         showSyncToast("Pull — conflicts", "err");
         alert("Pull has conflicts — resolve in Files.");
@@ -166,7 +171,7 @@ export function ToolBar({
           getAccountForRepo,
           toolbarAccountId || null,
         );
-        await Promise.all([refreshLog(), refreshBranches(), refreshStatus()]);
+        await refreshAfterRemoteSync();
         if (!clean) {
           showSyncToast("Pull — conflicts", "err");
           alert("Pull has conflicts — resolve in Files.");
@@ -195,7 +200,7 @@ export function ToolBar({
         getAccountForRepo,
         toolbarAccountId || null,
       );
-      await refreshBranches();
+      await refreshAfterRemoteSync();
     };
 
     setSyncOp("push");

@@ -25,23 +25,17 @@ import {
 type SectionId = "local" | "remote" | "tags" | "stash";
 
 export function Sidebar({ onOpenRepo, onHide }: { onOpenRepo: () => void; onHide?: () => void }) {
-  const { activeRepoPath, branches, setActiveRepo, closeRepo, refreshLog, refreshStatus, repos } =
+  const { activeRepoPath, branches, setActiveRepo, closeRepo, refreshAfterRemoteSync, repos } =
     useRepoStore();
   const { openBranchDialog, openMergeDialog } = useUIStore();
   const { getAccountForRepo } = useAccountStore();
   const currentBranch = openBranchName(branches);
 
-  const refreshAfterSync = async () => {
-    if (!activeRepoPath) return;
-    await setActiveRepo(activeRepoPath);
-    await Promise.all([refreshLog(), refreshStatus()]);
-  };
-
   const handlePushBranch = async (localBranchName: string) => {
     if (!activeRepoPath) return;
     try {
       await pushRepoBranch(activeRepoPath, localBranchName, getAccountForRepo);
-      await refreshAfterSync();
+      await refreshAfterRemoteSync();
     } catch (e) {
       if (e instanceof SyncCancelledError) return;
       const msg = describeSyncError(e);
@@ -53,7 +47,7 @@ export function Sidebar({ onOpenRepo, onHide }: { onOpenRepo: () => void; onHide
     if (!activeRepoPath) return;
     try {
       const clean = await pullRepoBranch(activeRepoPath, localBranchName, getAccountForRepo);
-      await refreshAfterSync();
+      await refreshAfterRemoteSync();
       if (!clean) alert("Pull has conflicts — resolve in Files & diff.");
     } catch (e) {
       if (e instanceof SyncCancelledError) return;
@@ -156,8 +150,7 @@ export function Sidebar({ onOpenRepo, onHide }: { onOpenRepo: () => void; onHide
     if (!window.confirm(`Merge "${sourceName}" into "${currentBranch}"?`)) return;
     try {
       const clean = await git.mergeBranch(activeRepoPath, sourceName);
-      await setActiveRepo(activeRepoPath);
-      await Promise.all([refreshLog(), refreshStatus()]);
+      await refreshAfterRemoteSync();
       if (!clean) alert("Merge has conflicts — resolve in Files & diff.");
     } catch (e) {
       alert(`Merge failed: ${e}`);

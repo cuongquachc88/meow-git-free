@@ -1,6 +1,8 @@
 use anyhow::Result;
-use git2::{BranchType, Repository};
+use git2::{BranchType, Oid, Repository};
 use serde::{Deserialize, Serialize};
+use std::cell::RefCell;
+use std::rc::Rc;
 
 #[derive(Debug, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -157,6 +159,71 @@ pub fn fetch_with_token(path: &str, remote_name: &str, username: &str, token: &s
     Ok(())
 }
 
+fn track_push_rejection(callbacks: &mut git2::RemoteCallbacks<'_>) -> Rc<RefCell<Option<String>>> {
+    let rejection = Rc::new(RefCell::new(None::<String>));
+    let capture = rejection.clone();
+    callbacks.push_update_reference(move |refname, status| {
+        if let Some(msg) = status {
+            if !msg.is_empty() {
+                *capture.borrow_mut() = Some(format!("{refname} rejected: {msg}"));
+            }
+        }
+        Ok(())
+    });
+    rejection
+}
+
+fn bail_if_push_rejected(rejection: Rc<RefCell<Option<String>>>) -> Result<()> {
+    if let Some(msg) = rejection.borrow_mut().take() {
+        anyhow::bail!(msg);
+    }
+    Ok(())
+}
+
+fn local_branch_oid(repo: &Repository, branch: &str) -> Result<Oid> {
+    Ok(repo
+        .find_branch(branch, BranchType::Local)?
+        .get()
+        .peel_to_commit()?
+        .id())
+}
+
+/// After push, fetch from remote and ensure remote-tracking ref matches local HEAD.
+fn verify_push_on_remote(path: &str, remote_name: &str, branch: &str) -> Result<()> {
+    let repo = Repository::open(path)?;
+    let local_oid = local_branch_oid(&repo, branch)?;
+    let remote_ref = format!("refs/remotes/{remote_name}/{branch}");
+    let remote_oid = repo
+        .find_reference(&remote_ref)
+        .ok()
+        .and_then(|r| r.peel_to_commit().ok())
+        .map(|c| c.id());
+    match remote_oid {
+        Some(oid) if oid == local_oid => Ok(()),
+        Some(oid) => anyhow::bail!(
+            "PUSH_NOT_ACCEPTED: local {branch} is at {local_oid} but {remote_name}/{branch} is still at {oid}"
+        ),
+        None => anyhow::bail!(
+            "PUSH_NOT_ACCEPTED: remote branch {remote_name}/{branch} missing after push (auth, permissions, or network)"
+        ),
+    }
+}
+
+fn set_upstream_after_push(repo: &Repository, remote_name: &str, branch_name: &str) -> Result<()> {
+    let upstream = format!("{remote_name}/{branch_name}");
+    let mut local = repo.find_branch(branch_name, BranchType::Local)?;
+    if local.upstream().is_err() {
+        let _ = local.set_upstream(Some(upstream.as_str()));
+    }
+    Ok(())
+}
+
+fn finish_push(path: &str, remote_name: &str, branch: &str) -> Result<()> {
+    let repo = Repository::open(path)?;
+    set_upstream_after_push(&repo, remote_name, branch)?;
+    Ok(())
+}
+
 /// Push current branch using explicit username + PAT token
 pub fn push_with_token(path: &str, remote_name: &str, branch: &str, username: &str, token: &str) -> Result<()> {
     let repo = Repository::open(path)?;
@@ -169,20 +236,58 @@ pub fn push_with_token(path: &str, remote_name: &str, branch: &str, username: &s
     }
     let mut callbacks = git2::RemoteCallbacks::new();
     callbacks.credentials(pat_credentials(remote_url, user, tok));
+    let rejection = track_push_rejection(&mut callbacks);
     let mut push_opts = git2::PushOptions::new();
     push_opts.remote_callbacks(callbacks);
     let refspec = format!("refs/heads/{}:refs/heads/{}", branch, branch);
     remote.push(&[&refspec], Some(&mut push_opts))?;
-    set_upstream_after_push(&repo, branch)?;
+    bail_if_push_rejected(rejection)?;
+    drop(remote);
+    drop(repo);
+    fetch_with_token(path, remote_name, username, token)?;
+    verify_push_on_remote(path, remote_name, branch)?;
+    finish_push(path, remote_name, branch)?;
     Ok(())
 }
 
-fn set_upstream_after_push(repo: &Repository, branch_name: &str) -> Result<()> {
-    let upstream = format!("origin/{branch_name}");
-    let mut local = repo.find_branch(branch_name, BranchType::Local)?;
-    if local.upstream().is_err() {
-        let _ = local.set_upstream(Some(upstream.as_str()));
+/// Push a single annotated or lightweight tag ref to the remote.
+pub fn push_tag(path: &str, remote_name: &str, tag_name: &str) -> Result<()> {
+    let repo = Repository::open(path)?;
+    let mut remote = repo.find_remote(remote_name)?;
+    let mut callbacks = git2::RemoteCallbacks::new();
+    callbacks.credentials(default_credentials);
+    let rejection = track_push_rejection(&mut callbacks);
+    let mut push_opts = git2::PushOptions::new();
+    push_opts.remote_callbacks(callbacks);
+    let refspec = format!("refs/tags/{tag_name}:refs/tags/{tag_name}");
+    remote.push(&[&refspec], Some(&mut push_opts))?;
+    bail_if_push_rejected(rejection)?;
+    Ok(())
+}
+
+pub fn push_tag_with_token(
+    path: &str,
+    remote_name: &str,
+    tag_name: &str,
+    username: &str,
+    token: &str,
+) -> Result<()> {
+    let repo = Repository::open(path)?;
+    let mut remote = repo.find_remote(remote_name)?;
+    let remote_url = remote.url().unwrap_or("").to_string();
+    let user = username.trim().to_string();
+    let tok = token.trim().to_string();
+    if tok.is_empty() {
+        anyhow::bail!("token is empty");
     }
+    let mut callbacks = git2::RemoteCallbacks::new();
+    callbacks.credentials(pat_credentials(remote_url, user, tok));
+    let rejection = track_push_rejection(&mut callbacks);
+    let mut push_opts = git2::PushOptions::new();
+    push_opts.remote_callbacks(callbacks);
+    let refspec = format!("refs/tags/{tag_name}:refs/tags/{tag_name}");
+    remote.push(&[&refspec], Some(&mut push_opts))?;
+    bail_if_push_rejected(rejection)?;
     Ok(())
 }
 
@@ -192,10 +297,17 @@ pub fn push_branch(path: &str, remote_name: &str, branch: &str) -> Result<()> {
     let mut remote = repo.find_remote(remote_name)?;
     let mut callbacks = git2::RemoteCallbacks::new();
     callbacks.credentials(default_credentials);
+    let rejection = track_push_rejection(&mut callbacks);
     let mut push_opts = git2::PushOptions::new();
     push_opts.remote_callbacks(callbacks);
     let refspec = format!("refs/heads/{}:refs/heads/{}", branch, branch);
     remote.push(&[&refspec], Some(&mut push_opts))?;
+    bail_if_push_rejected(rejection)?;
+    drop(remote);
+    drop(repo);
+    fetch_remote(path, remote_name)?;
+    verify_push_on_remote(path, remote_name, branch)?;
+    finish_push(path, remote_name, branch)?;
     Ok(())
 }
 

@@ -11,6 +11,8 @@ import {
   paintGraphCanvas,
   GRAPH_ROW_H,
 } from "../../lib/commitGraphLayout";
+import { useAccountStore } from "../../store/accountStore";
+import { createTagAndPushToOrigin } from "../../lib/pushTag";
 import {
   IconCherryPick,
   IconCreateBranch,
@@ -19,6 +21,7 @@ import {
   IconReset,
   IconRevert,
   IconSearch,
+  IconTag,
 } from "../shared/icons/GitIcons";
 
 const ROW_H = GRAPH_ROW_H;
@@ -51,6 +54,22 @@ function promptBranchName(shortId: string): string | null {
   return trimmed;
 }
 
+function promptTagName(shortId: string): string | null {
+  const name = window.prompt(`Tag name on ${shortId} (pushed to origin):`, "v1.0.0");
+  if (name === null) return null;
+  const trimmed = name.trim();
+  if (!trimmed) return null;
+  if (
+    trimmed.includes("..") ||
+    trimmed.includes(" ") ||
+    trimmed.startsWith("-") ||
+    /[~^:?*[\\]/.test(trimmed)
+  ) {
+    throw new Error("Invalid tag name");
+  }
+  return trimmed;
+}
+
 function CommitContextMenu({
   menu,
   repoPath,
@@ -63,6 +82,7 @@ function CommitContextMenu({
   onRefresh: () => void;
 }) {
   const { setActiveRepo } = useRepoStore();
+  const getAccountForRepo = useAccountStore((s) => s.getAccountForRepo);
   const [busy, setBusy] = useState(false);
   const [feedback, setFeedback] = useState("");
 
@@ -99,6 +119,27 @@ function CommitContextMenu({
       },
     },
     {
+      label: "Create tag & push to origin…",
+      icon: <IconTag size={15} />,
+      action: async () => {
+        const tagName = promptTagName(commit.shortId);
+        if (!tagName) throw "PROMPT_CANCEL";
+        const message = window.prompt(
+          "Annotated tag message (leave empty for lightweight tag):",
+          "",
+        );
+        if (message === null) throw "PROMPT_CANCEL";
+        const trimmedMessage = message.trim();
+        await createTagAndPushToOrigin(
+          repoPath,
+          tagName,
+          commit.id,
+          trimmedMessage || undefined,
+          getAccountForRepo,
+        );
+      },
+    },
+    {
       label: "Cherry-pick",
       icon: <IconCherryPick size={15} />,
       action: () => git.cherryPick(repoPath, commit.id),
@@ -132,7 +173,7 @@ function CommitContextMenu({
   ];
 
   const MENU_W = 240;
-  const MENU_H = 340;
+  const MENU_H = 380;
   const vw = window.innerWidth;
   const vh = window.innerHeight;
   const left = Math.min(menu.x + 2, vw - MENU_W - 8);

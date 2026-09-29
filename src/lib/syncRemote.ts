@@ -102,6 +102,9 @@ export function describeSyncError(e: unknown): string | null {
   if (/too many redirects|authentication replays|HTTP authentication failed/i.test(msg)) {
     return "GitHub rejected HTTPS auth. Use a new PAT with repo scope (revoke old tokens if one was leaked), confirm origin is https://github.com/you/repo.git with no user:pass in the URL, then push again.";
   }
+  if (/PUSH_NOT_ACCEPTED|rejected:/i.test(msg)) {
+    return "Push was not accepted by the remote (wrong account/PAT, branch protection, or no permission). Check toolbar account, PAT repo scope, and GitHub — nothing was pushed.";
+  }
   if (isRemoteNotFoundError(e)) {
     return "GitHub returned 404 — repository not created yet at origin. Meow Git can create it on GitHub (Create & add origin in the dialog).";
   }

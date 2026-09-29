@@ -55,6 +55,8 @@ pub fn run() {
             fetch_with_token,
             push_with_token,
             push_branch,
+            push_tag,
+            push_tag_with_token,
             pull_branch,
             pull_with_token,
             // merge / rebase / reset

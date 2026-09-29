@@ -34,6 +34,8 @@ interface RepoStore {
   refreshLog: () => Promise<void>;
   refreshBranches: () => Promise<void>;
   refreshStatus: () => Promise<void>;
+  /** Reload log, branches, status, and persisted repo HEAD after fetch/pull/push. */
+  refreshAfterRemoteSync: () => Promise<void>;
   selectCommit: (commit: CommitInfo | null) => void;
   refreshDiffs: () => Promise<void>;
   setActiveDiffs: (diffs: FileDiff[], selected?: FileDiff | null) => void;
@@ -177,6 +179,28 @@ export const useRepoStore = create<RepoStore>()(
     if (!activeRepoPath) return;
     const status = await git.getStatus(activeRepoPath);
     set({ status });
+  },
+
+  refreshAfterRemoteSync: async () => {
+    const { activeRepoPath } = get();
+    if (!activeRepoPath) return;
+    const [commits, branches, status, info] = await Promise.all([
+      git.getLog(activeRepoPath, 500),
+      git.listBranches(activeRepoPath),
+      git.getStatus(activeRepoPath),
+      git.openRepo(activeRepoPath),
+    ]);
+    const head = openBranchName(branches);
+    set((s) => ({
+      commits,
+      branches,
+      status,
+      repos: bumpRecentRepo(
+        withSyncedHeadBranch(s.repos, activeRepoPath, branches),
+        { ...info, headBranch: head ?? info.headBranch },
+      ),
+    }));
+    await get().refreshDiffs();
   },
 
   selectCommit: (commit) => {
