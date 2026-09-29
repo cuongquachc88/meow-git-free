@@ -57,6 +57,8 @@ pub fn run() {
             push_branch,
             push_tag,
             push_tag_with_token,
+            delete_remote_tag,
+            delete_remote_tag_with_token,
             pull_branch,
             pull_with_token,
             // merge / rebase / reset
@@ -67,6 +69,7 @@ pub fn run() {
             rebase_onto,
             // tags
             list_tags,
+            list_tag_refs,
             create_tag,
             delete_tag,
             // submodules

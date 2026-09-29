@@ -23,6 +23,7 @@ vi.mock("../store/accountStore", () => ({
     getState: () => ({
       accounts: [],
       bindRepoToAccount: vi.fn(),
+      markPatPresent: vi.fn(),
     }),
   },
 }));
@@ -46,7 +47,7 @@ describe("getBoundToken", () => {
   it("returns credentials when account and token exist", async () => {
     getToken.mockResolvedValue("secret");
     const token = await getBoundToken("/repo", () => ({ id: "acc-1", username: "octo" }));
-    expect(token).toEqual({ username: "octo", token: "secret" });
+    expect(token).toEqual({ username: "octo", token: "secret", accountId: "acc-1" });
     expect(getToken).toHaveBeenCalledWith("acc-1");
   });
 

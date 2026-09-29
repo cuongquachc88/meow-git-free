@@ -7,8 +7,34 @@
 
 use anyhow::{Context, Result};
 use keyring::Entry;
+use std::collections::HashMap;
 use std::fs;
 use std::path::PathBuf;
+use std::sync::{Mutex, OnceLock};
+
+fn token_cache() -> &'static Mutex<HashMap<String, String>> {
+    static CACHE: OnceLock<Mutex<HashMap<String, String>>> = OnceLock::new();
+    CACHE.get_or_init(|| Mutex::new(HashMap::new()))
+}
+
+fn cache_get(account_id: &str) -> Option<String> {
+    token_cache()
+        .lock()
+        .ok()
+        .and_then(|g| g.get(account_id).cloned())
+}
+
+fn cache_set(account_id: &str, token: &str) {
+    if let Ok(mut g) = token_cache().lock() {
+        g.insert(account_id.to_string(), token.to_string());
+    }
+}
+
+fn cache_remove(account_id: &str) {
+    if let Ok(mut g) = token_cache().lock() {
+        g.remove(account_id);
+    }
+}
 
 /// Matches `identifier` in tauri.conf.json.
 const APP_ID: &str = "com.cuongquachc.meow-git";
@@ -135,6 +161,7 @@ pub fn store_token(account_id: &str, token: &str) -> Result<()> {
     if keyring_roundtrip_ok(account_id, token) {
         let _ = file_delete(account_id);
         let _ = legacy_keyring_entry(account_id)?.delete_credential();
+        cache_set(account_id, token);
         return Ok(());
     }
 
@@ -149,13 +176,14 @@ pub fn store_token(account_id: &str, token: &str) -> Result<()> {
     {
         file_store(account_id, token)?;
         if file_get(account_id).map(|t| t == token).unwrap_or(false) {
+            cache_set(account_id, token);
             return Ok(());
         }
         anyhow::bail!("could not persist token")
     }
 }
 
-pub fn get_token(account_id: &str) -> Result<String> {
+fn get_token_uncached(account_id: &str) -> Result<String> {
     if let Ok(token) = keyring_get(account_id) {
         if !token.trim().is_empty() {
             let _ = file_delete(account_id);
@@ -180,7 +208,19 @@ pub fn get_token(account_id: &str) -> Result<String> {
     file_get(account_id)
 }
 
+pub fn get_token(account_id: &str) -> Result<String> {
+    if let Some(token) = cache_get(account_id) {
+        if !token.trim().is_empty() {
+            return Ok(token);
+        }
+    }
+    let token = get_token_uncached(account_id)?;
+    cache_set(account_id, &token);
+    Ok(token)
+}
+
 pub fn delete_token(account_id: &str) -> Result<()> {
+    cache_remove(account_id);
     keyring_delete(account_id)?;
     let _ = file_delete(account_id);
     Ok(())

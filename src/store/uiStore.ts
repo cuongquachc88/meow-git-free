@@ -13,6 +13,13 @@ interface UIStore {
   isMergeDialogOpen: boolean;
   mergeDialogSource: string | null;
   branchDialogFromRef: string | null;
+  isCreateTagDialogOpen: boolean;
+  createTagTarget: { commitId: string; shortId: string; summary: string } | null;
+  isPushTagsDialogOpen: boolean;
+  pushTagsTargetCommitId: string | null;
+  isDeleteTagsDialogOpen: boolean;
+  deleteTagsTargetCommitId: string | null;
+  isDeleteRemoteTagDialogOpen: boolean;
   isAccountManagerOpen: boolean;
   /** When set, AccountPatDialog collects a PAT for this account id. */
   patPromptAccountId: string | null;
@@ -34,6 +41,14 @@ interface UIStore {
   closeBranchDialog: () => void;
   openMergeDialog: (source?: string) => void;
   closeMergeDialog: () => void;
+  openCreateTagDialog: (target: { commitId: string; shortId: string; summary: string }) => void;
+  closeCreateTagDialog: () => void;
+  openPushTagsDialog: (commitId: string) => void;
+  closePushTagsDialog: () => void;
+  openDeleteTagsDialog: (commitId: string) => void;
+  closeDeleteTagsDialog: () => void;
+  openDeleteRemoteTagDialog: () => void;
+  closeDeleteRemoteTagDialog: () => void;
   toggleAccountManager: () => void;
   openPatPrompt: (accountId: string) => void;
   closePatPrompt: () => void;
@@ -54,6 +69,13 @@ export const useUIStore = create<UIStore>((set) => ({
   isMergeDialogOpen: false,
   mergeDialogSource: null,
   branchDialogFromRef: null,
+  isCreateTagDialogOpen: false,
+  createTagTarget: null,
+  isPushTagsDialogOpen: false,
+  pushTagsTargetCommitId: null,
+  isDeleteTagsDialogOpen: false,
+  deleteTagsTargetCommitId: null,
+  isDeleteRemoteTagDialogOpen: false,
   isAccountManagerOpen: false,
   patPromptAccountId: null,
   isRemoteSetupOpen: false,
@@ -78,6 +100,18 @@ export const useUIStore = create<UIStore>((set) => ({
   openMergeDialog: (source) =>
     set({ isMergeDialogOpen: true, mergeDialogSource: source ?? null }),
   closeMergeDialog: () => set({ isMergeDialogOpen: false, mergeDialogSource: null }),
+  openCreateTagDialog: (createTagTarget) =>
+    set({ isCreateTagDialogOpen: true, createTagTarget }),
+  closeCreateTagDialog: () => set({ isCreateTagDialogOpen: false, createTagTarget: null }),
+  openPushTagsDialog: (pushTagsTargetCommitId) =>
+    set({ isPushTagsDialogOpen: true, pushTagsTargetCommitId }),
+  closePushTagsDialog: () => set({ isPushTagsDialogOpen: false, pushTagsTargetCommitId: null }),
+  openDeleteTagsDialog: (deleteTagsTargetCommitId) =>
+    set({ isDeleteTagsDialogOpen: true, deleteTagsTargetCommitId }),
+  closeDeleteTagsDialog: () =>
+    set({ isDeleteTagsDialogOpen: false, deleteTagsTargetCommitId: null }),
+  openDeleteRemoteTagDialog: () => set({ isDeleteRemoteTagDialogOpen: true }),
+  closeDeleteRemoteTagDialog: () => set({ isDeleteRemoteTagDialogOpen: false }),
   toggleAccountManager: () => set((s) => ({ isAccountManagerOpen: !s.isAccountManagerOpen })),
   openPatPrompt: (accountId) => set({ patPromptAccountId: accountId }),
   closePatPrompt: () => set({ patPromptAccountId: null }),

@@ -43,19 +43,21 @@ export async function getBoundToken(
   activeRepoPath: string,
   getAccountForRepo: (path: string) => { id: string; username: string } | null | undefined,
   toolbarAccountId?: string | null,
-): Promise<{ username: string; token: string } | null> {
+  options?: { fresh?: boolean },
+): Promise<{ username: string; token: string; accountId: string } | null> {
+  const fresh = options?.fresh;
   const repoPath = normalizeRepoPath(activeRepoPath);
   const { accounts, bindRepoToAccount } = useAccountStore.getState();
 
-  const tryAccount = async (a: { id: string; username: string }) => {
-    const token = await readStoredToken(a.id);
+  const tryAccount = async (a: { id: string; username: string }, fresh?: boolean) => {
+    const token = await readStoredToken(a.id, fresh ? { fresh: true } : undefined);
     if (!token) return null;
-    return { username: a.username, token };
+    return { username: a.username, token, accountId: a.id };
   };
 
   const pick = async (a: { id: string; username: string } | null | undefined) => {
     if (!a) return null;
-    const creds = await tryAccount(a);
+    const creds = await tryAccount(a, fresh);
     if (creds) bindRepoToAccount(repoPath, a.id);
     return creds;
   };
@@ -71,7 +73,7 @@ export async function getBoundToken(
   if (boundCreds) return boundCreds;
 
   for (const a of accounts) {
-    const creds = await tryAccount(a);
+    const creds = await tryAccount(a, fresh);
     if (creds) {
       bindRepoToAccount(repoPath, a.id);
       return creds;
@@ -99,7 +101,7 @@ function wrapPushError(detail: string, hadToken: boolean): Error {
 export async function pushBranch(
   activeRepoPath: string,
   branchName: string,
-  creds: { username: string; token: string } | null,
+  creds: { username: string; token: string; accountId?: string } | null,
 ): Promise<void> {
   const remoteName = await resolveRemoteName(activeRepoPath);
   const needsToken = await remoteUrlIsHttp(activeRepoPath, remoteName);

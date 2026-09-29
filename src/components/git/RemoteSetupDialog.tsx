@@ -62,17 +62,10 @@ export function RemoteSetupDialog() {
       return;
     }
 
-    let cancelled = false;
-    setTokenChecking(true);
-    void pickAccountIdWithToken(accounts, bound?.id).then(({ accountId: id, hasToken }) => {
-      if (cancelled) return;
-      setAccountId(id);
-      setTokenInKeychain(hasToken);
-      setTokenChecking(false);
-    });
-    return () => {
-      cancelled = true;
-    };
+    const { accountId: id, hasToken } = pickAccountIdWithToken(accounts, bound?.id);
+    setAccountId(id);
+    setTokenInKeychain(hasToken);
+    setTokenChecking(false);
   }, [isRemoteSetupOpen, remoteSetupDefaultRepoName, bound?.id, accounts]);
 
   useEffect(() => {

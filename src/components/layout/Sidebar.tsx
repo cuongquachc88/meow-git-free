@@ -3,6 +3,7 @@ import { createPortal } from "react-dom";
 import { useRepoStore } from "../../store/repoStore";
 import { useUIStore } from "../../store/uiStore";
 import { useAccountStore } from "../../store/accountStore";
+import { deleteTagFromOrigin } from "../../lib/pushTag";
 import { SyncCancelledError, describeSyncError, pullRepoBranch, pushRepoBranch } from "../../lib/syncRemote";
 import { git } from "../../ipc/git";
 import type { BranchInfo } from "../../types/git";
@@ -25,9 +26,9 @@ import {
 type SectionId = "local" | "remote" | "tags" | "stash";
 
 export function Sidebar({ onOpenRepo, onHide }: { onOpenRepo: () => void; onHide?: () => void }) {
-  const { activeRepoPath, branches, setActiveRepo, closeRepo, refreshAfterRemoteSync, repos } =
+  const { activeRepoPath, branches, tags, setActiveRepo, closeRepo, refreshAfterRemoteSync, refreshTags, refreshLog, repos } =
     useRepoStore();
-  const { openBranchDialog, openMergeDialog } = useUIStore();
+  const { openBranchDialog, openMergeDialog, openDeleteRemoteTagDialog } = useUIStore();
   const { getAccountForRepo } = useAccountStore();
   const currentBranch = openBranchName(branches);
 
@@ -69,7 +70,6 @@ export function Sidebar({ onOpenRepo, onHide }: { onOpenRepo: () => void; onHide
     tags: false,
     stash: false,
   });
-  const [tags, setTags] = useState<{ name: string; targetId: string }[]>([]);
   const [stashes, setStashes] = useState<{ index: number; message: string }[]>([]);
   const [stashBusy, setStashBusy] = useState(false);
 
@@ -97,13 +97,41 @@ export function Sidebar({ onOpenRepo, onHide }: { onOpenRepo: () => void; onHide
     ? filteredLocal.length + filteredRemote.length + filteredTags.length + filteredStashes.length
     : localBranches.length + remoteBranches.length + tags.length + stashes.length;
 
+  const handleDeleteTag = async (name: string, scope: "local" | "origin" | "both") => {
+    if (!activeRepoPath) return;
+    const msg =
+      scope === "local"
+        ? `Delete local tag "${name}"?`
+        : scope === "origin"
+          ? `Delete tag "${name}" on origin? (local copy kept unless you delete it too)`
+          : `Delete tag "${name}" locally and on origin?`;
+    if (!window.confirm(msg)) return;
+    try {
+      if (scope === "origin" || scope === "both") {
+        await deleteTagFromOrigin(activeRepoPath, name, getAccountForRepo);
+      }
+      if (scope === "local" || scope === "both") {
+        try {
+          await git.deleteTag(activeRepoPath, name);
+        } catch (e) {
+          if (scope === "local" || !/not found|cannot locate/i.test(String(e))) {
+            throw e;
+          }
+        }
+      }
+      await Promise.all([refreshTags(), refreshLog()]);
+    } catch (e) {
+      const msg2 = describeSyncError(e);
+      alert(msg2 ? `Delete tag failed: ${msg2}` : `Delete tag failed: ${e}`);
+    }
+  };
+
   useEffect(() => {
     if (!activeRepoPath) {
-      setTags([]);
       setStashes([]);
       return;
     }
-    git.listTags(activeRepoPath).then(setTags).catch(() => setTags([]));
+    void refreshTags();
     git.listStashes(activeRepoPath)
       .then((items) =>
         setStashes(
@@ -294,16 +322,70 @@ export function Sidebar({ onOpenRepo, onHide }: { onOpenRepo: () => void; onHide
               onToggle={() => toggleSection("tags")}
             >
               {filteredTags.length === 0 ? (
-                <EmptyHint text={q ? "No matching tags" : "No tags"} />
+                <EmptyHint
+                  text={
+                    q
+                      ? "No matching tags"
+                      : "No tags — Fetch to load origin-only tags from remote tracking refs"
+                  }
+                />
               ) : (
                 filteredTags.map((t) => (
-                  <div key={t.name} className="flex items-center gap-2 px-3 py-1 mx-1">
+                  <div
+                    key={t.name}
+                    className="flex items-center gap-1.5 px-3 py-1 mx-1 rounded-md group"
+                    title={
+                      t.local && t.onOrigin
+                        ? "Local and on origin"
+                        : t.onOrigin
+                          ? "On origin only (remote-tracking ref)"
+                          : "Local only"
+                    }
+                  >
                     <IconTag size={12} style={{ color: "var(--text-faint)" }} />
-                    <span className="text-[11px] truncate" style={{ color: "var(--text-secondary)" }}>
+                    <span className="text-[11px] truncate flex-1 min-w-0" style={{ color: "var(--text-secondary)" }}>
                       {t.name}
                     </span>
+                    {!t.local && t.onOrigin && (
+                      <span
+                        className="text-[8px] px-1 py-0.5 rounded shrink-0 uppercase tracking-wide"
+                        style={{ color: "var(--accent)", background: "rgba(129,140,248,0.12)" }}
+                      >
+                        origin
+                      </span>
+                    )}
+                    {t.local && (
+                      <button
+                        type="button"
+                        onClick={() => void handleDeleteTag(t.name, "local")}
+                        className="opacity-0 group-hover:opacity-100 text-[9px] px-1.5 py-0.5 rounded shrink-0"
+                        style={{ color: "rgba(239,68,68,0.85)" }}
+                      >
+                        Local
+                      </button>
+                    )}
+                    {t.onOrigin && (
+                      <button
+                        type="button"
+                        onClick={() => void handleDeleteTag(t.name, "origin")}
+                        className="opacity-0 group-hover:opacity-100 text-[9px] px-1.5 py-0.5 rounded shrink-0"
+                        style={{ color: "var(--accent)" }}
+                      >
+                        Origin
+                      </button>
+                    )}
                   </div>
                 ))
+              )}
+              {!q && (
+                <button
+                  type="button"
+                  onClick={openDeleteRemoteTagDialog}
+                  className="mx-2 mt-1 mb-0.5 w-[calc(100%-1rem)] text-left text-[10px] px-2 py-1.5 rounded-md transition-colors hover:bg-[color:var(--bg-hover)]"
+                  style={{ color: "var(--text-muted)" }}
+                >
+                  Delete on origin by name…
+                </button>
               )}
             </SidebarSection>
 

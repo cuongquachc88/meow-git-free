@@ -19,6 +19,10 @@ export function clearPatAutoDismissed(accountId: string) {
   patAutoDismissed.delete(accountId);
 }
 
+export function clearPatAutoShown(accountId: string) {
+  patAutoShown.delete(accountId);
+}
+
 /** Show in-app PAT dialog; resolves with trimmed token or null if cancelled. */
 export function requestAccountPat(accountId: string, options?: { force?: boolean }): Promise<string | null> {
   if (waiter) {
@@ -37,12 +41,16 @@ export function requestAccountPat(accountId: string, options?: { force?: boolean
 /**
  * For push/pull auth: prompt at most once per account per session unless user opens Accounts manually.
  */
-export async function requestAccountPatForAuth(accountId: string): Promise<string | null> {
-  if (await readStoredToken(accountId)) return null;
-  if (patAutoDismissed.has(accountId) || patAutoShown.has(accountId)) {
+/** @param reprompt When true, show dialog even if keychain already has a token (e.g. after 403). */
+export async function requestAccountPatForAuth(
+  accountId: string,
+  options?: { reprompt?: boolean },
+): Promise<string | null> {
+  if (!options?.reprompt && (await readStoredToken(accountId))) return null;
+  if (!options?.reprompt && (patAutoDismissed.has(accountId) || patAutoShown.has(accountId))) {
     return null;
   }
-  patAutoShown.add(accountId);
+  if (!options?.reprompt) patAutoShown.add(accountId);
   return requestAccountPat(accountId, { force: true });
 }
 

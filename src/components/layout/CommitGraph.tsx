@@ -11,8 +11,7 @@ import {
   paintGraphCanvas,
   GRAPH_ROW_H,
 } from "../../lib/commitGraphLayout";
-import { useAccountStore } from "../../store/accountStore";
-import { createTagAndPushToOrigin } from "../../lib/pushTag";
+import { useUIStore } from "../../store/uiStore";
 import {
   IconCherryPick,
   IconCreateBranch,
@@ -54,35 +53,21 @@ function promptBranchName(shortId: string): string | null {
   return trimmed;
 }
 
-function promptTagName(shortId: string): string | null {
-  const name = window.prompt(`Tag name on ${shortId} (pushed to origin):`, "v1.0.0");
-  if (name === null) return null;
-  const trimmed = name.trim();
-  if (!trimmed) return null;
-  if (
-    trimmed.includes("..") ||
-    trimmed.includes(" ") ||
-    trimmed.startsWith("-") ||
-    /[~^:?*[\\]/.test(trimmed)
-  ) {
-    throw new Error("Invalid tag name");
-  }
-  return trimmed;
-}
-
 function CommitContextMenu({
   menu,
   repoPath,
+  tagsOnCommit,
   onClose,
   onRefresh,
 }: {
   menu: CtxMenu;
   repoPath: string;
+  tagsOnCommit: string[];
   onClose: () => void;
   onRefresh: () => void;
 }) {
   const { setActiveRepo } = useRepoStore();
-  const getAccountForRepo = useAccountStore((s) => s.getAccountForRepo);
+  const { openCreateTagDialog, openPushTagsDialog, openDeleteTagsDialog } = useUIStore();
   const [busy, setBusy] = useState(false);
   const [feedback, setFeedback] = useState("");
 
@@ -119,26 +104,38 @@ function CommitContextMenu({
       },
     },
     {
-      label: "Create tag & push to origin…",
+      label: "Create tag…",
       icon: <IconTag size={15} />,
       action: async () => {
-        const tagName = promptTagName(commit.shortId);
-        if (!tagName) throw "PROMPT_CANCEL";
-        const message = window.prompt(
-          "Annotated tag message (leave empty for lightweight tag):",
-          "",
-        );
-        if (message === null) throw "PROMPT_CANCEL";
-        const trimmedMessage = message.trim();
-        await createTagAndPushToOrigin(
-          repoPath,
-          tagName,
-          commit.id,
-          trimmedMessage || undefined,
-          getAccountForRepo,
-        );
+        onClose();
+        openCreateTagDialog({
+          commitId: commit.id,
+          shortId: commit.shortId,
+          summary: commit.summary,
+        });
       },
     },
+    ...(tagsOnCommit.length > 0
+      ? [
+          {
+            label: `Push tag${tagsOnCommit.length > 1 ? "s" : ""} to origin…`,
+            icon: <IconTag size={15} strokeWidth={2} />,
+            action: async () => {
+              onClose();
+              openPushTagsDialog(commit.id);
+            },
+          },
+          {
+            label: `Delete tag${tagsOnCommit.length > 1 ? "s" : ""}…`,
+            icon: <IconTag size={15} strokeWidth={1.25} />,
+            danger: true,
+            action: async () => {
+              onClose();
+              openDeleteTagsDialog(commit.id);
+            },
+          },
+        ]
+      : []),
     {
       label: "Cherry-pick",
       icon: <IconCherryPick size={15} />,
@@ -173,7 +170,7 @@ function CommitContextMenu({
   ];
 
   const MENU_W = 240;
-  const MENU_H = 380;
+  const MENU_H = 400;
   const vw = window.innerWidth;
   const vh = window.innerHeight;
   const left = Math.min(menu.x + 2, vw - MENU_W - 8);
@@ -262,8 +259,18 @@ function CommitContextMenu({
 // ─── CommitGraph ─────────────────────────────────────────────────────────────
 
 export function CommitGraph({ onOpenChangesPanel }: { onOpenChangesPanel?: () => void } = {}) {
-  const { commits, selectedCommit, selectCommit, activeRepoPath, refreshLog, refreshBranches, refreshStatus, branches } =
-    useRepoStore();
+  const {
+    commits,
+    selectedCommit,
+    selectCommit,
+    activeRepoPath,
+    refreshLog,
+    refreshBranches,
+    refreshTags,
+    refreshStatus,
+    branches,
+    tags,
+  } = useRepoStore();
 
   const handleCommitClick = (commit: CommitInfo) => {
     selectCommit(commit);
@@ -298,6 +305,20 @@ export function CommitGraph({ onOpenChangesPanel }: { onOpenChangesPanel?: () =>
     raw.forEach((labels, tipId) => m.set(tipId, dedupeBranchLabels(labels)));
     return m;
   }, [branches]);
+
+  const commitTagNames = useMemo(() => {
+    const m = new Map<string, string[]>();
+    for (const t of tags) {
+      const list = m.get(t.targetId) ?? [];
+      list.push(t.name);
+      m.set(t.targetId, list);
+    }
+    m.forEach((names, id) => {
+      names.sort((a, b) => a.localeCompare(b));
+      m.set(id, names);
+    });
+    return m;
+  }, [tags]);
 
   // Unique authors for the filter dropdown
   const authors = useMemo(() => {
@@ -404,7 +425,7 @@ export function CommitGraph({ onOpenChangesPanel }: { onOpenChangesPanel?: () =>
   }, [rows, visRows.length, visStart, selectedCommit, graphW]);
 
   const handleRefresh = async () => {
-    await Promise.all([refreshLog(), refreshBranches(), refreshStatus()]);
+    await Promise.all([refreshLog(), refreshBranches(), refreshTags(), refreshStatus()]);
   };
 
   if (commits.length === 0) {
@@ -528,6 +549,7 @@ export function CommitGraph({ onOpenChangesPanel }: { onOpenChangesPanel?: () =>
             {visRows.map(({ commit, color }) => {
               const isSelected = commit.id === selectedCommit?.id;
               const labels = commitBranchLabels.get(commit.id) ?? [];
+              const tagNames = commitTagNames.get(commit.id) ?? [];
               return (
                 <div
                   key={commit.id}
@@ -558,7 +580,7 @@ export function CommitGraph({ onOpenChangesPanel }: { onOpenChangesPanel?: () =>
                   <div className="flex items-center gap-1.5 min-w-0 overflow-hidden">
                     {labels.map((lbl) => (
                       <span
-                        key={lbl.name}
+                        key={`b:${lbl.name}`}
                         className="shrink-0 text-[10px] px-1.5 py-px rounded font-medium max-w-[120px] truncate"
                         style={
                           lbl.isHead
@@ -570,6 +592,20 @@ export function CommitGraph({ onOpenChangesPanel }: { onOpenChangesPanel?: () =>
                         title={lbl.name}
                       >
                         {formatBranchLabel(lbl.name, lbl.isRemote)}
+                      </span>
+                    ))}
+                    {tagNames.map((name) => (
+                      <span
+                        key={`t:${name}`}
+                        className="shrink-0 text-[10px] px-1.5 py-px rounded font-medium max-w-[120px] truncate font-mono"
+                        style={{
+                          background: "rgba(168,85,247,0.12)",
+                          border: "1px solid rgba(168,85,247,0.28)",
+                          color: "rgba(196,181,253,0.95)",
+                        }}
+                        title={`Tag ${name}`}
+                      >
+                        {name}
                       </span>
                     ))}
                     <span
@@ -634,6 +670,7 @@ export function CommitGraph({ onOpenChangesPanel }: { onOpenChangesPanel?: () =>
           <CommitContextMenu
             menu={ctxMenu}
             repoPath={activeRepoPath}
+            tagsOnCommit={commitTagNames.get(ctxMenu.commit.id) ?? []}
             onClose={() => setCtxMenu(null)}
             onRefresh={handleRefresh}
           />

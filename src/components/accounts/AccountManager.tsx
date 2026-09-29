@@ -7,6 +7,7 @@ import { accounts as accountsIpc } from "../../ipc/accounts";
 import { openUrl } from "@tauri-apps/plugin-opener";
 import { useAccountTokenStatus } from "../../hooks/useAccountTokenStatus";
 import { requestAccountPat } from "../../lib/requestAccountPat";
+import { saveStoredToken } from "../../lib/accountToken";
 
 const PROVIDERS: {
   value: ProviderKind;
@@ -112,7 +113,7 @@ export function AccountManager() {
         (a) => a.provider === provider && a.username.toLowerCase() === username.trim().toLowerCase(),
       );
       if (existing) {
-        await accountsIpc.storeToken(existing.id, token.trim());
+        await saveStoredToken(existing.id, token.trim());
         if (activeRepoPath) bindRepoToAccount(activeRepoPath, existing.id);
       } else {
         const account = await accountsIpc.createAccount(

@@ -291,6 +291,47 @@ pub fn push_tag_with_token(
     Ok(())
 }
 
+/// Delete a tag on the remote (`git push origin :refs/tags/name`).
+pub fn delete_remote_tag(path: &str, remote_name: &str, tag_name: &str) -> Result<()> {
+    let repo = Repository::open(path)?;
+    let mut remote = repo.find_remote(remote_name)?;
+    let mut callbacks = git2::RemoteCallbacks::new();
+    callbacks.credentials(default_credentials);
+    let rejection = track_push_rejection(&mut callbacks);
+    let mut push_opts = git2::PushOptions::new();
+    push_opts.remote_callbacks(callbacks);
+    let refspec = format!(":refs/tags/{tag_name}");
+    remote.push(&[&refspec], Some(&mut push_opts))?;
+    bail_if_push_rejected(rejection)?;
+    Ok(())
+}
+
+pub fn delete_remote_tag_with_token(
+    path: &str,
+    remote_name: &str,
+    tag_name: &str,
+    username: &str,
+    token: &str,
+) -> Result<()> {
+    let repo = Repository::open(path)?;
+    let mut remote = repo.find_remote(remote_name)?;
+    let remote_url = remote.url().unwrap_or("").to_string();
+    let user = username.trim().to_string();
+    let tok = token.trim().to_string();
+    if tok.is_empty() {
+        anyhow::bail!("token is empty");
+    }
+    let mut callbacks = git2::RemoteCallbacks::new();
+    callbacks.credentials(pat_credentials(remote_url, user, tok));
+    let rejection = track_push_rejection(&mut callbacks);
+    let mut push_opts = git2::PushOptions::new();
+    push_opts.remote_callbacks(callbacks);
+    let refspec = format!(":refs/tags/{tag_name}");
+    remote.push(&[&refspec], Some(&mut push_opts))?;
+    bail_if_push_rejected(rejection)?;
+    Ok(())
+}
+
 /// Push using SSH agent / system credential helper (same as fetch).
 pub fn push_branch(path: &str, remote_name: &str, branch: &str) -> Result<()> {
     let repo = Repository::open(path)?;
@@ -311,12 +352,39 @@ pub fn push_branch(path: &str, remote_name: &str, branch: &str) -> Result<()> {
     Ok(())
 }
 
+fn verify_pull_synced_with_remote(path: &str, remote_name: &str, branch: &str) -> Result<()> {
+    let repo = Repository::open(path)?;
+    let local_oid = repo.head()?.peel_to_commit()?.id();
+    let remote_ref = format!("refs/remotes/{remote_name}/{branch}");
+    let Some(remote_oid) = repo
+        .find_reference(&remote_ref)
+        .ok()
+        .and_then(|r| r.peel_to_commit().ok())
+        .map(|c| c.id())
+    else {
+        return Ok(());
+    };
+    let (_, behind) = repo.graph_ahead_behind(local_oid, remote_oid)?;
+    if behind > 0 {
+        anyhow::bail!(
+            "PULL_NOT_COMPLETE: {branch} is still {behind} commit(s) behind {remote_name}/{branch}"
+        );
+    }
+    Ok(())
+}
+
+fn finish_pull(path: &str, remote_name: &str, branch: &str) -> Result<()> {
+    verify_pull_synced_with_remote(path, remote_name, branch)
+}
+
 /// Checkout branch, fetch remote, merge remote-tracking ref into the branch.
 pub fn pull_branch(path: &str, remote_name: &str, branch: &str) -> Result<bool> {
     crate::git::branches::checkout_branch(path, branch)?;
     fetch_remote(path, remote_name)?;
     let remote_ref = format!("{}/{}", remote_name, branch);
-    crate::git::merge::merge_ref(path, &remote_ref)
+    let clean = crate::git::merge::merge_ref(path, &remote_ref)?;
+    finish_pull(path, remote_name, branch)?;
+    Ok(clean)
 }
 
 pub fn pull_with_token(
@@ -329,5 +397,7 @@ pub fn pull_with_token(
     crate::git::branches::checkout_branch(path, branch)?;
     fetch_with_token(path, remote_name, username, token)?;
     let remote_ref = format!("{}/{}", remote_name, branch);
-    crate::git::merge::merge_ref(path, &remote_ref)
+    let clean = crate::git::merge::merge_ref(path, &remote_ref)?;
+    finish_pull(path, remote_name, branch)?;
+    Ok(clean)
 }

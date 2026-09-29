@@ -216,6 +216,30 @@ mod tags_tests {
         let tag = list.iter().find(|t| t.name == "v1.0.0-ann").unwrap();
         assert_eq!(tag.message.as_deref(), Some("Release 1.0.0"));
     }
+
+    #[test]
+    fn list_tag_refs_includes_remote_tracking_only() {
+        let (_dir, path) = make_test_repo();
+        let p = path.to_str().unwrap();
+        let repo = Repository::open(p).unwrap();
+        let head = repo.head().unwrap().peel_to_commit().unwrap().id();
+        repo.remote("origin", "https://example.com/repo.git")
+            .unwrap();
+        repo.reference(
+            &format!("refs/remotes/origin/tags/remote-only"),
+            head,
+            true,
+            "test remote tag",
+        )
+        .unwrap();
+        drop(repo);
+
+        let refs = tags::list_tag_refs(p, "origin").unwrap();
+        let remote_only = refs.iter().find(|t| t.name == "remote-only").unwrap();
+        assert!(!remote_only.local);
+        assert!(remote_only.on_origin);
+        assert_eq!(remote_only.target_id, head.to_string());
+    }
 }
 
 #[cfg(test)]

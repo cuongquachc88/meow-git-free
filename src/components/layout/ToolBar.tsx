@@ -3,7 +3,8 @@ import { showSyncToast } from "../../lib/syncToast";
 import { useRepoStore } from "../../store/repoStore";
 import { useUIStore, Theme } from "../../store/uiStore";
 import { useAccountStore } from "../../store/accountStore";
-import { readStoredToken } from "../../lib/accountToken";
+import { clearSessionToken, readStoredToken } from "../../lib/accountToken";
+import { clearPatAutoDismissed, clearPatAutoShown } from "../../lib/requestAccountPat";
 import { git } from "../../ipc/git";
 import { ensureRemoteBeforeSync } from "../../lib/ensureRemote";
 import { isNoRemoteError, resolveRemoteName } from "../../lib/remoteSync";
@@ -63,13 +64,8 @@ export function ToolBar({
       setToolbarAccountId("");
       return;
     }
-    let cancelled = false;
-    void pickAccountIdWithToken(accounts, boundAccount?.id).then(({ accountId }) => {
-      if (!cancelled) setToolbarAccountId(accountId);
-    });
-    return () => {
-      cancelled = true;
-    };
+    const { accountId } = pickAccountIdWithToken(accounts, boundAccount?.id);
+    setToolbarAccountId(accountId);
   }, [activeRepoPath, boundAccount?.id, accounts]);
 
   const tokenStatus = useAccountTokenStatus(accounts);
@@ -116,10 +112,15 @@ export function ToolBar({
     }
   };
 
-  const promptPatAndSave = async (): Promise<boolean> => {
+  const promptPatAndSave = async (options?: { reprompt?: boolean }): Promise<boolean> => {
     const acct = toolbarAccount ?? boundAccount ?? accounts[0] ?? null;
     if (!acct) return false;
-    const pat = await requestAccountPatForAuth(acct.id);
+    if (options?.reprompt) {
+      clearSessionToken(acct.id);
+      clearPatAutoDismissed(acct.id);
+      clearPatAutoShown(acct.id);
+    }
+    const pat = await requestAccountPatForAuth(acct.id, options);
     if (pat) {
       setToolbarAccountId(acct.id);
       if (activeRepoPath) bindRepoToAccount(activeRepoPath, acct.id);
@@ -129,17 +130,30 @@ export function ToolBar({
   };
 
   const handleAuthSyncFailure = async (_action: "Pull" | "Push", e: unknown): Promise<boolean> => {
+    const raw = e instanceof Error ? e.message : String(e);
+    const stalePat = /\b403\b|status code: 403|authentication replays|HTTP authentication failed/i.test(raw);
     const msg = describeSyncError(e);
     if (!msg) return true;
-    if (!isAuthSyncError(e)) {
+    if (!isAuthSyncError(e) && !stalePat) {
       return false;
     }
     const acct = toolbarAccount ?? boundAccount ?? accounts[0] ?? null;
-    if (acct && (await readStoredToken(acct.id))) {
+    if (acct && (await readStoredToken(acct.id)) && !stalePat) {
       return false;
     }
+    if (stalePat && acct) {
+      if (await promptPatAndSave({ reprompt: true })) return false;
+      showSyncToast("GitHub rejected the saved PAT — paste a new one with repo scope in Accounts", "err");
+      return true;
+    }
+    const hadPatFlag = acct ? !!useAccountStore.getState().patPresent[acct.id] : false;
     if (await promptPatAndSave()) return false;
-    showSyncToast("Add a PAT once in Accounts — it stays in Keychain", "err");
+    showSyncToast(
+      hadPatFlag
+        ? "PAT missing in Keychain for this app (dev vs release). Re-save in Accounts."
+        : "Add a PAT in Accounts — it stays in Keychain",
+      "err",
+    );
     return true;
   };
 

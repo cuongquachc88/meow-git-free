@@ -13,7 +13,7 @@ export function TagsPanel() {
   const load = async () => {
     if (!activeRepoPath) return;
     try {
-      setTags(await git.listTags(activeRepoPath));
+      setTags(await git.listTagRefs(activeRepoPath));
     } catch {
       setTags([]);
     }

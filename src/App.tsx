@@ -8,6 +8,10 @@ import { useUIStore } from "./store/uiStore";
 import { CommitDialog } from "./components/git/CommitDialog";
 import { BranchDialog } from "./components/git/BranchDialog";
 import { MergeDialog } from "./components/git/MergeDialog";
+import { CreateTagDialog } from "./components/git/CreateTagDialog";
+import { PushTagsDialog } from "./components/git/PushTagsDialog";
+import { DeleteTagsDialog } from "./components/git/DeleteTagsDialog";
+import { DeleteRemoteTagDialog } from "./components/git/DeleteRemoteTagDialog";
 import { RemoteSetupDialog } from "./components/git/RemoteSetupDialog";
 import { AccountManager } from "./components/accounts/AccountManager";
 import { AccountPatDialog } from "./components/accounts/AccountPatDialog";
@@ -191,6 +195,10 @@ function App() {
       <CommitDialog />
       <BranchDialog />
       <MergeDialog />
+      <CreateTagDialog />
+      <PushTagsDialog />
+      <DeleteTagsDialog />
+      <DeleteRemoteTagDialog />
       <RemoteSetupDialog />
       <AccountManager />
       <AccountPatDialog />

@@ -69,6 +69,12 @@ export interface TagInfo {
   taggerTime: number | null;
 }
 
+/** Local and/or origin tag (remote-tracking under refs/remotes/origin/tags/). */
+export interface TagRefInfo extends TagInfo {
+  local: boolean;
+  onOrigin: boolean;
+}
+
 export interface SubmoduleInfo {
   name: string;
   path: string;

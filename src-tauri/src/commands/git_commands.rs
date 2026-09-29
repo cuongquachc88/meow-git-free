@@ -179,6 +179,23 @@ pub fn push_tag_with_token(
 }
 
 #[tauri::command]
+pub fn delete_remote_tag(path: String, remote_name: String, tag_name: String) -> Result<(), String> {
+    remotes::delete_remote_tag(&path, &remote_name, &tag_name).map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+pub fn delete_remote_tag_with_token(
+    path: String,
+    remote_name: String,
+    tag_name: String,
+    username: String,
+    token: String,
+) -> Result<(), String> {
+    remotes::delete_remote_tag_with_token(&path, &remote_name, &tag_name, &username, &token)
+        .map_err(|e| e.to_string())
+}
+
+#[tauri::command]
 pub fn pull_branch(path: String, remote_name: String, branch: String) -> Result<bool, String> {
     remotes::pull_branch(&path, &remote_name, &branch).map_err(|e| e.to_string())
 }
@@ -222,6 +239,12 @@ pub fn rebase_onto(path: String, onto_branch: String) -> Result<(), String> {
 #[tauri::command]
 pub fn list_tags(path: String) -> Result<Vec<tags::TagInfo>, String> {
     tags::list_tags(&path).map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+pub fn list_tag_refs(path: String, remote_name: Option<String>) -> Result<Vec<tags::TagRefInfo>, String> {
+    let remote = remote_name.as_deref().unwrap_or("origin");
+    tags::list_tag_refs(&path, remote).map_err(|e| e.to_string())
 }
 
 #[tauri::command]

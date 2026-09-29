@@ -11,6 +11,7 @@ import type {
   StashEntry,
   SubmoduleInfo,
   TagInfo,
+  TagRefInfo,
 } from "../types/git";
 
 export const git = {
@@ -64,6 +65,10 @@ export const git = {
     invoke<void>("push_tag", { path, remoteName, tagName }),
   pushTagWithToken: (path: string, remoteName: string, tagName: string, username: string, token: string) =>
     invoke<void>("push_tag_with_token", { path, remoteName, tagName, username, token }),
+  deleteRemoteTag: (path: string, remoteName: string, tagName: string) =>
+    invoke<void>("delete_remote_tag", { path, remoteName, tagName }),
+  deleteRemoteTagWithToken: (path: string, remoteName: string, tagName: string, username: string, token: string) =>
+    invoke<void>("delete_remote_tag_with_token", { path, remoteName, tagName, username, token }),
   pullWithToken: (path: string, remoteName: string, branch: string, username: string, token: string) =>
     invoke<boolean>("pull_with_token", { path, remoteName, branch, username, token }),
 
@@ -75,6 +80,8 @@ export const git = {
   rebaseOnto: (path: string, ontoBranch: string) => invoke<void>("rebase_onto", { path, ontoBranch }),
 
   listTags: (path: string) => invoke<TagInfo[]>("list_tags", { path }),
+  listTagRefs: (path: string, remoteName?: string) =>
+    invoke<TagRefInfo[]>("list_tag_refs", { path, remoteName: remoteName ?? null }),
   createTag: (path: string, name: string, targetRef?: string, message?: string) =>
     invoke<void>("create_tag", { path, name, targetRef, message }),
   deleteTag: (path: string, name: string) => invoke<void>("delete_tag", { path, name }),

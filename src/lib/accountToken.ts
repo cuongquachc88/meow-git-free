@@ -1,5 +1,6 @@
 import { accounts as accountsIpc } from "../ipc/accounts";
 import type { Account } from "../types/accounts";
+import { useAccountStore } from "../store/accountStore";
 
 /** In-memory only — avoids re-prompting when keychain read is slow; cleared on app quit. */
 const sessionTokens = new Map<string, string>();
@@ -12,8 +13,15 @@ export function clearSessionToken(accountId: string) {
   sessionTokens.delete(accountId);
 }
 
-export async function readStoredToken(accountId: string): Promise<string | null> {
+export async function readStoredToken(
+  accountId: string,
+  options?: { fresh?: boolean },
+): Promise<string | null> {
   if (!accountId) return null;
+
+  if (options?.fresh) {
+    clearSessionToken(accountId);
+  }
 
   const cached = sessionTokens.get(accountId);
   if (cached) return cached;
@@ -25,28 +33,30 @@ export async function readStoredToken(accountId: string): Promise<string | null>
       sessionTokens.set(accountId, trimmed);
       return trimmed;
     }
+    useAccountStore.getState().markPatPresent(accountId, false);
     return null;
   } catch {
+    useAccountStore.getState().markPatPresent(accountId, false);
     return null;
   }
 }
 
-/** Prefer bound account, else first account that has a keychain token. */
-export async function pickAccountIdWithToken(
+/** Prefer bound account, else first account marked as having a PAT (no keychain probe). */
+export function pickAccountIdWithToken(
   accounts: Account[],
   preferredId?: string | null,
-): Promise<{ accountId: string; hasToken: boolean }> {
-  if (preferredId) {
-    const has = !!(await readStoredToken(preferredId));
-    if (has) return { accountId: preferredId, hasToken: true };
+): { accountId: string; hasToken: boolean } {
+  const { patPresent } = useAccountStore.getState();
+  if (preferredId && patPresent[preferredId]) {
+    return { accountId: preferredId, hasToken: true };
   }
   for (const a of accounts) {
-    if (await readStoredToken(a.id)) {
+    if (patPresent[a.id]) {
       return { accountId: a.id, hasToken: true };
     }
   }
   const fallback = preferredId ?? accounts[0]?.id ?? "";
-  return { accountId: fallback, hasToken: false };
+  return { accountId: fallback, hasToken: patPresent[fallback] ?? false };
 }
 
 export async function saveStoredToken(accountId: string, token: string): Promise<void> {
@@ -56,6 +66,7 @@ export async function saveStoredToken(accountId: string, token: string): Promise
   }
   await accountsIpc.storeToken(accountId, trimmed);
   setSessionToken(accountId, trimmed);
+  useAccountStore.getState().markPatPresent(accountId, true);
   const verified = await readStoredToken(accountId);
   if (!verified) {
     throw new Error(

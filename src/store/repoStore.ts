@@ -1,6 +1,6 @@
 import { create } from "zustand";
 import { persist } from "zustand/middleware";
-import type { BranchInfo, CommitInfo, FileDiff, FileStatus, RepoInfo } from "../types/git";
+import type { BranchInfo, CommitInfo, FileDiff, FileStatus, RepoInfo, TagRefInfo } from "../types/git";
 import { git } from "../ipc/git";
 import { openBranchName } from "../lib/headBranch";
 import { normalizeRepoPath } from "../lib/repoPath";
@@ -21,6 +21,7 @@ interface RepoStore {
   activeRepoPath: string | null;
   commits: CommitInfo[];
   branches: BranchInfo[];
+  tags: TagRefInfo[];
   status: FileStatus[];
   selectedCommit: CommitInfo | null;
   activeDiffs: FileDiff[];
@@ -33,6 +34,7 @@ interface RepoStore {
   setActiveRepo: (path: string) => Promise<void>;
   refreshLog: () => Promise<void>;
   refreshBranches: () => Promise<void>;
+  refreshTags: () => Promise<void>;
   refreshStatus: () => Promise<void>;
   /** Reload log, branches, status, and persisted repo HEAD after fetch/pull/push. */
   refreshAfterRemoteSync: () => Promise<void>;
@@ -58,6 +60,7 @@ export const useRepoStore = create<RepoStore>()(
   activeRepoPath: null,
   commits: [],
   branches: [],
+  tags: [],
   status: [],
   selectedCommit: null,
   activeDiffs: [],
@@ -100,6 +103,7 @@ export const useRepoStore = create<RepoStore>()(
       activeRepoPath: null,
       commits: [],
       branches: [],
+      tags: [],
       status: [],
       selectedCommit: null,
       activeDiffs: [],
@@ -119,6 +123,7 @@ export const useRepoStore = create<RepoStore>()(
             activeRepoPath: null,
             commits: [],
             branches: [],
+            tags: [],
             status: [],
             selectedCommit: null,
             activeDiffs: [],
@@ -135,15 +140,17 @@ export const useRepoStore = create<RepoStore>()(
   setActiveRepo: async (path) => {
     set({ activeRepoPath: path, loading: true, error: null });
     try {
-      const [commits, branches, status] = await Promise.all([
+      const [commits, branches, tags, status] = await Promise.all([
         git.getLog(path, 500),
         git.listBranches(path),
+        git.listTagRefs(path),
         git.getStatus(path),
       ]);
       const info = await git.openRepo(path);
       set((s) => ({
         commits,
         branches,
+        tags,
         status,
         loading: false,
         repos: bumpRecentRepo(
@@ -174,6 +181,17 @@ export const useRepoStore = create<RepoStore>()(
     }));
   },
 
+  refreshTags: async () => {
+    const { activeRepoPath } = get();
+    if (!activeRepoPath) return;
+    try {
+      const tags = await git.listTagRefs(activeRepoPath);
+      set({ tags });
+    } catch {
+      set({ tags: [] });
+    }
+  },
+
   refreshStatus: async () => {
     const { activeRepoPath } = get();
     if (!activeRepoPath) return;
@@ -184,9 +202,10 @@ export const useRepoStore = create<RepoStore>()(
   refreshAfterRemoteSync: async () => {
     const { activeRepoPath } = get();
     if (!activeRepoPath) return;
-    const [commits, branches, status, info] = await Promise.all([
+    const [commits, branches, tags, status, info] = await Promise.all([
       git.getLog(activeRepoPath, 500),
       git.listBranches(activeRepoPath),
+      git.listTagRefs(activeRepoPath),
       git.getStatus(activeRepoPath),
       git.openRepo(activeRepoPath),
     ]);
@@ -194,6 +213,7 @@ export const useRepoStore = create<RepoStore>()(
     set((s) => ({
       commits,
       branches,
+      tags,
       status,
       repos: bumpRecentRepo(
         withSyncedHeadBranch(s.repos, activeRepoPath, branches),
