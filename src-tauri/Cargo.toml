@@ -3,6 +3,7 @@ name = "meow-git"
 version = "0.1.0"
 description = "Meow Git — A full-featured Git GUI desktop app"
 authors = []
+license = "MIT"
 edition = "2021"
 
 [lib]
